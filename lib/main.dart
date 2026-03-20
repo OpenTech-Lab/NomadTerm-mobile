@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'models/connection_config.dart';
 import 'providers/settings_provider.dart';
-import 'screens/connect_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/session_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
@@ -49,7 +49,7 @@ class _AppMaterial extends StatelessWidget {
               create: (_) => WsService(savedConfig!)..connect(),
               child: const SessionListScreen(),
             )
-          : const ConnectScreen(),
+          : const OnboardingScreen(),
     );
   }
 }

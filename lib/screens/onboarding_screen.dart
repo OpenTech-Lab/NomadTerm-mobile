@@ -10,14 +10,14 @@ import '../theme.dart';
 import 'session_list_screen.dart';
 
 /// Connection setup screen — terminal login aesthetic.
-class ConnectScreen extends StatefulWidget {
-  const ConnectScreen({super.key});
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
 
   @override
-  State<ConnectScreen> createState() => _ConnectScreenState();
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _ConnectScreenState extends State<ConnectScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen> {
   final _hostCtrl  = TextEditingController(text: '100.x.x.x');
   final _portCtrl  = TextEditingController(text: '7681');
   final _tokenCtrl = TextEditingController();
@@ -239,8 +239,8 @@ class _TermButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final th = context.watch<SettingsProvider>().nomadTheme;
     final enabled = onTap != null && !loading;
-    final fg = primary ? th.bg : th.accent;
-    final bg = primary ? th.accent : Colors.transparent;
+    final fg = primary ? th.accent : th.accent;
+    final bg = Colors.transparent;
     final bd = primary ? th.accent : th.border;
 
     return GestureDetector(
