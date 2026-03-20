@@ -24,6 +24,7 @@ class SessionListScreen extends StatefulWidget {
 
 class _SessionListScreenState extends State<SessionListScreen> {
   List<Session> _sessions = [];
+  String _workspace = '';
   StreamSubscription? _sub;
 
   @override
@@ -36,8 +37,11 @@ class _SessionListScreenState extends State<SessionListScreen> {
     final ws = context.read<WsService>();
     _sub = ws.events.listen((event) {
       switch (event) {
-        case WsSessionList(:final sessions):
-          setState(() => _sessions = sessions);
+        case WsSessionList(:final sessions, :final workspace):
+          setState(() {
+            _sessions = sessions;
+            if (workspace.isNotEmpty) _workspace = workspace;
+          });
         case WsApproveRequest(:final id, :final command, :final risk):
           _handleApprove(id, command, risk);
         default:
@@ -130,14 +134,27 @@ class _SessionListScreenState extends State<SessionListScreen> {
       backgroundColor: th.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: Row(children: [
-          Text('nomadterm', style: th.monoMd(color: th.accent, size: fsz)),
-          const SizedBox(width: 12),
-          Text(
-            th.sessionCountLabel(_sessions.length),
-            style: th.monoSm(size: fsz - 2),
-          ),
-        ]),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(children: [
+              Text('nomadterm', style: th.monoMd(color: th.accent, size: fsz)),
+              const SizedBox(width: 12),
+              Text(
+                th.sessionCountLabel(_sessions.length),
+                style: th.monoSm(size: fsz - 2),
+              ),
+            ]),
+            if (_workspace.isNotEmpty)
+              Text(
+                _workspace.split('/').last.isEmpty
+                    ? _workspace
+                    : _workspace.split('/').last,
+                style: th.monoSm(color: th.textMuted, size: fsz - 3),
+              ),
+          ],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),

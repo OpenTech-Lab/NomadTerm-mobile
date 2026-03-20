@@ -21,7 +21,9 @@ class WsPtyOutput extends WsEvent {
 
 class WsSessionList extends WsEvent {
   final List<Session> sessions;
-  WsSessionList(this.sessions);
+  /// Absolute path of the server's working directory (repo root).
+  final String workspace;
+  WsSessionList(this.sessions, {this.workspace = ''});
 }
 
 class WsApproveRequest extends WsEvent {
@@ -106,7 +108,8 @@ class WsService extends ChangeNotifier {
             final list = (json['sessions'] as List)
                 .map((e) => Session.fromJson(e as Map<String, dynamic>))
                 .toList();
-            _eventController.add(WsSessionList(list));
+            final workspace = json['workspace'] as String? ?? '';
+            _eventController.add(WsSessionList(list, workspace: workspace));
           case 'approve':
             _eventController.add(WsApproveRequest(
               id: json['id'] as String,
