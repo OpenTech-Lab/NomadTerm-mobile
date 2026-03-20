@@ -137,6 +137,11 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
+      - name: Extract build number from pubspec
+        run: |
+          build_number=$(grep '^version:' pubspec.yaml | sed -E 's/version:[[:space:]]*[^+]+\+//')
+          echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+
       - name: Build and Upload
         id: build_and_upload
         working-directory: ios
@@ -146,7 +151,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_BASE64 }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
-          IOS_BUILD_NUMBER: ${{ github.run_number }}
+          IOS_BUILD_NUMBER: ${{ env.IOS_BUILD_NUMBER }}
           # Set by the signing step via $GITHUB_ENV; listed here for clarity.
           IOS_PROVISIONING_PROFILE_NAME: ${{ env.IOS_PROVISIONING_PROFILE_NAME }}
           IOS_PROVISIONING_PROFILE_UUID: ${{ env.IOS_PROVISIONING_PROFILE_UUID }}

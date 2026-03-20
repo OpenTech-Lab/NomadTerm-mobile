@@ -2,7 +2,7 @@
 
 ## What Is This?
 
-`mobile/` is the Flutter companion app for NomadTerm. It connects to the NomadTerm server running on another machine and gives you a phone-friendly interface for remote AI terminal sessions.
+This repo is the Flutter companion app for NomadTerm. It connects to the NomadTerm server running on another machine and gives you a phone-friendly interface for remote AI terminal sessions.
 
 The app is responsible for:
 
