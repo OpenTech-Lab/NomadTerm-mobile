@@ -54,6 +54,20 @@ abstract class NomadTheme {
   String sessionCountLabel(int count);
   String cliDisplayName(String cli);
 
+  // Bottom nav labels
+  String get labelTabSessions;
+  String get labelTabDashboard;
+
+  // Dashboard labels
+  String get labelDashboard;
+  String get labelCpuPower;
+  String get labelAiUsage;
+  String get labelTokensIn;
+  String get labelTokensOut;
+  String get labelCostToday;
+  String get labelWatts;
+  String get labelNoUsageData;
+
   // MaterialApp theme (rebuilt whenever active theme changes)
   ThemeData get materialTheme => ThemeData(
         brightness: Brightness.dark,
@@ -139,6 +153,17 @@ class MatrixTheme extends NomadTheme {
   @override String sessionCountLabel(int count) =>
       '$count session${count == 1 ? '' : 's'}';
   @override String cliDisplayName(String cli) => cli;
+
+  @override String get labelTabSessions   => 'sessions';
+  @override String get labelTabDashboard  => 'dashboard';
+  @override String get labelDashboard     => 'dashboard';
+  @override String get labelCpuPower      => 'cpu power';
+  @override String get labelAiUsage       => 'ai usage';
+  @override String get labelTokensIn      => 'in';
+  @override String get labelTokensOut     => 'out';
+  @override String get labelCostToday     => 'cost today';
+  @override String get labelWatts         => 'W';
+  @override String get labelNoUsageData   => 'waiting for usage data...';
 }
 
 // ── Pixel RPG ─────────────────────────────────────────────────────────────
@@ -177,6 +202,17 @@ class PixelRpgTheme extends NomadTheme {
         'gemini'  => '[ORC] $cli',
         _         => cli,
       };
+
+  @override String get labelTabSessions   => '// party';
+  @override String get labelTabDashboard  => '// status';
+  @override String get labelDashboard     => '// status screen';
+  @override String get labelCpuPower      => '// cpu draw';
+  @override String get labelAiUsage       => '// party stats';
+  @override String get labelTokensIn      => 'MP_IN';
+  @override String get labelTokensOut     => 'MP_OUT';
+  @override String get labelCostToday     => 'GOLD/DAY';
+  @override String get labelWatts         => 'PWR';
+  @override String get labelNoUsageData   => '// awaiting signal...';
 }
 
 // ── Shared widgets ────────────────────────────────────────────────────────

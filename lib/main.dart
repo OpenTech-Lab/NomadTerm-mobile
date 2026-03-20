@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'models/connection_config.dart';
 import 'providers/settings_provider.dart';
+import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/session_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/repo_auth_service.dart';
@@ -60,7 +60,7 @@ class _AppMaterial extends StatelessWidget {
       home: savedConfig != null
           ? ChangeNotifierProvider(
               create: (_) => WsService(savedConfig!)..connect(),
-              child: const SessionListScreen(),
+              child: const MainShell(),
             )
           : const OnboardingScreen(),
     );

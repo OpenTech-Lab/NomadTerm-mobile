@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/connection_config.dart';
 import '../models/session.dart';
+import '../models/usage.dart';
 
 /// Events emitted by [WsService].
 sealed class WsEvent {}
@@ -36,6 +37,11 @@ class WsApproveRequest extends WsEvent {
 class WsError extends WsEvent {
   final String message;
   WsError(this.message);
+}
+
+class WsUsageUpdate extends WsEvent {
+  final UsageData data;
+  WsUsageUpdate(this.data);
 }
 
 /// Manages the WebSocket connection to the NomadTerm daemon.
@@ -118,6 +124,8 @@ class WsService extends ChangeNotifier {
             ));
           case 'error':
             _eventController.add(WsError(json['message'] as String? ?? 'unknown error'));
+          case 'usage_update':
+            _eventController.add(WsUsageUpdate(UsageData.fromJson(json)));
           default:
             debugPrint('[ws] unknown message type: $type');
         }
