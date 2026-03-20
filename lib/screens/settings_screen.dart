@@ -4,18 +4,19 @@ import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme.dart';
 
-/// Settings screen — terminal-styled sliders for font sizes.
+/// Settings screen — terminal-styled sliders for font sizes + theme picker.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final sp = context.watch<SettingsProvider>();
+    final th = sp.nomadTheme;
 
     return Scaffold(
-      backgroundColor: T.bg,
+      backgroundColor: th.bg,
       appBar: AppBar(
-        title: Text('settings', style: T.monoMd()),
+        title: Text(th.labelSettings, style: th.monoMd()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, size: 18),
           onPressed: () => Navigator.of(context).pop(),
@@ -27,6 +28,25 @@ class SettingsScreen extends StatelessWidget {
       ),
       body: ListView(
         children: [
+          // ── Theme ─────────────────────────────────────────────────
+          _Section(label: '// theme'),
+
+          _ThemeTile(
+            label: 'Matrix',
+            description: 'green terminal',
+            active: sp.appTheme == AppTheme.matrix,
+            onTap: () => sp.setTheme(AppTheme.matrix),
+          ),
+          const TDivider(),
+          _ThemeTile(
+            label: 'Pixel RPG',
+            description: 'arcane void',
+            active: sp.appTheme == AppTheme.pixelRpg,
+            onTap: () => sp.setTheme(AppTheme.pixelRpg),
+          ),
+          const TDivider(),
+
+          // ── Font size ─────────────────────────────────────────────
           _Section(label: '// font size'),
 
           _SliderRow(
@@ -37,7 +57,7 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (v) => sp.setUiFontSize(v),
             preview: Text(
               'nomadterm',
-              style: T.monoMd(color: T.accent, size: sp.uiFontSize),
+              style: th.monoMd(color: th.accent, size: sp.uiFontSize),
             ),
           ),
 
@@ -51,7 +71,7 @@ class SettingsScreen extends StatelessWidget {
             onChanged: (v) => sp.setTermFontSize(v),
             preview: Text(
               r'$ echo hello world',
-              style: T.monoMd(size: sp.termFontSize),
+              style: th.monoMd(size: sp.termFontSize),
             ),
           ),
 
@@ -80,10 +100,57 @@ class _Section extends StatelessWidget {
   const _Section({required this.label});
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-        child: Text(label, style: T.monoSm(color: T.textDim, size: 11)),
-      );
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      child: Text(label, style: th.monoSm(color: th.textDim, size: 11)),
+    );
+  }
+}
+
+class _ThemeTile extends StatelessWidget {
+  final String label;
+  final String description;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ThemeTile({
+    required this.label,
+    required this.description,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: active ? th.accent : th.textDim,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: th.monoMd(color: active ? th.accent : th.textPrimary)),
+              Text(description, style: th.monoSm()),
+            ],
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
 class _SliderRow extends StatelessWidget {
@@ -104,64 +171,57 @@ class _SliderRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Label + current value
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(label, style: T.monoSm(color: T.textMuted)),
-                Text(
-                  value.toStringAsFixed(1),
-                  style: T.monoSm(color: T.accent),
-                ),
-              ],
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: th.monoSm(color: th.textMuted)),
+              Text(value.toStringAsFixed(1), style: th.monoSm(color: th.accent)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: th.surface,
+            child: preview,
+          ),
+          const SizedBox(height: 10),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 1,
+              activeTrackColor: th.accent,
+              inactiveTrackColor: th.border,
+              thumbColor: th.accent,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              overlayColor: th.accent.withAlpha(30),
             ),
-            const SizedBox(height: 12),
-
-            // Preview text
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              color: T.surface,
-              child: preview,
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: ((max - min) * 2).round(),
+              onChanged: onChanged,
             ),
-            const SizedBox(height: 10),
-
-            // Slider
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 1,
-                activeTrackColor: T.accent,
-                inactiveTrackColor: T.border,
-                thumbColor: T.accent,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                overlayColor: T.accent.withAlpha(30),
-              ),
-              child: Slider(
-                value: value,
-                min: min,
-                max: max,
-                divisions: ((max - min) * 2).round(), // 0.5 steps
-                onChanged: onChanged,
-              ),
-            ),
-
-            // Min / Max labels
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(min.toStringAsFixed(0), style: T.monoSm(color: T.textDim, size: 10)),
-                Text(max.toStringAsFixed(0), style: T.monoSm(color: T.textDim, size: 10)),
-              ],
-            ),
-          ],
-        ),
-      );
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(min.toStringAsFixed(0), style: th.monoSm(color: th.textDim, size: 10)),
+              Text(max.toStringAsFixed(0), style: th.monoSm(color: th.textDim, size: 10)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ActionRow extends StatelessWidget {
@@ -171,14 +231,17 @@ class _ActionRow extends StatelessWidget {
   const _ActionRow({required this.label, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          child: Row(children: [
-            Text('> ', style: T.monoMd(color: T.textMuted)),
-            Text(label, style: T.monoMd(color: T.textPrimary)),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(children: [
+          Text('> ', style: th.monoMd(color: th.textMuted)),
+          Text(label, style: th.monoMd()),
+        ]),
+      ),
+    );
+  }
 }

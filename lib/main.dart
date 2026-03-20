@@ -8,7 +8,6 @@ import 'screens/session_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/ws_service.dart';
-import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,16 +28,28 @@ class NomadTermApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider.value(
         value: settings,
-        child: MaterialApp(
-          title: 'NomadTerm',
-          debugShowCheckedModeBanner: false,
-          theme: T.materialTheme,
-          home: savedConfig != null
-              ? ChangeNotifierProvider(
-                  create: (_) => WsService(savedConfig!)..connect(),
-                  child: const SessionListScreen(),
-                )
-              : const ConnectScreen(),
-        ),
+        child: _AppMaterial(savedConfig: savedConfig),
       );
+}
+
+/// Rebuilds MaterialApp (and its theme) whenever [SettingsProvider] notifies.
+class _AppMaterial extends StatelessWidget {
+  final ConnectionConfig? savedConfig;
+  const _AppMaterial({required this.savedConfig});
+
+  @override
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    return MaterialApp(
+      title: 'NomadTerm',
+      debugShowCheckedModeBanner: false,
+      theme: th.materialTheme,
+      home: savedConfig != null
+          ? ChangeNotifierProvider(
+              create: (_) => WsService(savedConfig!)..connect(),
+              child: const SessionListScreen(),
+            )
+          : const ConnectScreen(),
+    );
+  }
 }

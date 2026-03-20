@@ -1,63 +1,87 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'providers/settings_provider.dart';
 
-/// Central design tokens — pure black professional terminal style.
-abstract final class T {
-  // ── Colours ───────────────────────────────────────────────────────────
-  static const bg       = Color(0xFF000000); // pure black
-  static const surface  = Color(0xFF0A0A0A); // panel background
-  static const border   = Color(0xFF1C1C1C); // hairline separators
-  static const accent   = Color(0xFF00FF88); // terminal green
-  static const accentDim= Color(0xFF00C86A); // pressed / disabled
-  static const textPrimary = Color(0xFFEEEEEE);
-  static const textMuted   = Color(0xFF555555);
-  static const textDim     = Color(0xFF2C2C2C);
-  static const errorRed    = Color(0xFFFF3B3B);
-  static const warnYellow  = Color(0xFFFFB300);
+// ── Theme enum ────────────────────────────────────────────────────────────
 
-  // ── Typography ────────────────────────────────────────────────────────
-  static const mono = TextStyle(fontFamily: 'monospace');
+enum AppTheme { matrix, pixelRpg }
 
-  static TextStyle monoSm({Color color = textMuted, double size = 11}) =>
-      TextStyle(fontFamily: 'monospace', fontSize: size, color: color);
+// ── Abstract theme data ───────────────────────────────────────────────────
 
-  static TextStyle monoMd({Color color = textPrimary, double size = 13}) =>
-      TextStyle(fontFamily: 'monospace', fontSize: size, color: color);
+abstract class NomadTheme {
+  // Colours
+  Color get bg;
+  Color get surface;
+  Color get border;
+  Color get accent;
+  Color get accentDim;
+  Color get textPrimary;
+  Color get textMuted;
+  Color get textDim;
+  Color get errorRed;
+  Color get warnYellow;
+  Color get hp;
+  Color get mp;
 
-  static TextStyle monoLg({Color color = textPrimary, double size = 16, FontWeight weight = FontWeight.w400}) =>
-      TextStyle(fontFamily: 'monospace', fontSize: size, color: color, fontWeight: weight);
+  // Typography
+  String get fontFamily;
 
-  // ── MaterialApp theme ─────────────────────────────────────────────────
-  static ThemeData get materialTheme => ThemeData(
+  TextStyle monoSm({Color? color, double size = 11}) =>
+      TextStyle(fontFamily: fontFamily, fontSize: size, color: color ?? textMuted);
+
+  TextStyle monoMd({Color? color, double size = 13}) =>
+      TextStyle(fontFamily: fontFamily, fontSize: size, color: color ?? textPrimary);
+
+  TextStyle monoLg({
+    Color? color,
+    double size = 16,
+    FontWeight weight = FontWeight.w400,
+  }) =>
+      TextStyle(
+        fontFamily: fontFamily,
+        fontSize: size,
+        color: color ?? textPrimary,
+        fontWeight: weight,
+      );
+
+  // Label tokens
+  String get labelConnected;
+  String get labelReconnecting;
+  String get labelNoSessions;
+  String get labelSpawnHint;
+  String get labelNewSession;
+  String get labelSelectCli;
+  String get labelSettings;
+  String get labelKill;
+  String sessionCountLabel(int count);
+  String cliDisplayName(String cli);
+
+  // MaterialApp theme (rebuilt whenever active theme changes)
+  ThemeData get materialTheme => ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: bg,
-        colorScheme: const ColorScheme.dark(
+        colorScheme: ColorScheme.dark(
           primary: accent,
           surface: surface,
           onSurface: textPrimary,
           error: errorRed,
         ),
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           backgroundColor: bg,
           foregroundColor: textPrimary,
           elevation: 0,
           centerTitle: false,
           titleTextStyle: TextStyle(
-            fontFamily: 'monospace',
+            fontFamily: fontFamily,
             fontSize: 14,
             color: textPrimary,
             letterSpacing: 0.5,
           ),
         ),
         dividerColor: border,
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        floatingActionButtonTheme: FloatingActionButtonThemeData(
           backgroundColor: accent,
           foregroundColor: bg,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
-          ),
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         ),
         listTileTheme: const ListTileThemeData(
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -67,63 +91,129 @@ abstract final class T {
           fillColor: surface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.zero,
-            borderSide: const BorderSide(color: border),
+            borderSide: BorderSide(color: border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.zero,
-            borderSide: const BorderSide(color: border),
+            borderSide: BorderSide(color: border),
           ),
-          focusedBorder: const OutlineInputBorder(
+          focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.zero,
             borderSide: BorderSide(color: accent),
           ),
-          labelStyle: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-            color: textMuted,
-          ),
-          hintStyle: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-            color: textDim,
-          ),
+          labelStyle: TextStyle(fontFamily: fontFamily, fontSize: 12, color: textMuted),
+          hintStyle: TextStyle(fontFamily: fontFamily, fontSize: 12, color: textDim),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
       );
 }
 
-/// A hairline horizontal rule matching the terminal border colour.
+// ── Matrix (default) ──────────────────────────────────────────────────────
+
+class MatrixTheme extends NomadTheme {
+  static final MatrixTheme instance = MatrixTheme._();
+  MatrixTheme._();
+
+  @override Color get bg          => const Color(0xFF000000);
+  @override Color get surface     => const Color(0xFF0A0A0A);
+  @override Color get border      => const Color(0xFF1C1C1C);
+  @override Color get accent      => const Color(0xFF00FF88);
+  @override Color get accentDim   => const Color(0xFF00C86A);
+  @override Color get textPrimary => const Color(0xFFEEEEEE);
+  @override Color get textMuted   => const Color(0xFF555555);
+  @override Color get textDim     => const Color(0xFF2C2C2C);
+  @override Color get errorRed    => const Color(0xFFFF3B3B);
+  @override Color get warnYellow  => const Color(0xFFFFB300);
+  @override Color get hp          => const Color(0xFFFF3B3B);
+  @override Color get mp          => const Color(0xFF4488FF);
+  @override String get fontFamily => 'monospace';
+
+  @override String get labelConnected    => 'connected';
+  @override String get labelReconnecting => 'reconnecting';
+  @override String get labelNoSessions   => 'no active sessions';
+  @override String get labelSpawnHint    => 'tap + to spawn an ai cli';
+  @override String get labelNewSession   => 'new session';
+  @override String get labelSelectCli    => 'select ai cli';
+  @override String get labelSettings     => 'settings';
+  @override String get labelKill         => 'kill';
+  @override String sessionCountLabel(int count) =>
+      '$count session${count == 1 ? '' : 's'}';
+  @override String cliDisplayName(String cli) => cli;
+}
+
+// ── Pixel RPG ─────────────────────────────────────────────────────────────
+
+class PixelRpgTheme extends NomadTheme {
+  static final PixelRpgTheme instance = PixelRpgTheme._();
+  PixelRpgTheme._();
+
+  @override Color get bg          => const Color(0xFF0D0014);
+  @override Color get surface     => const Color(0xFF1A0A2E);
+  @override Color get border      => const Color(0xFF3D1F6B);
+  @override Color get accent      => const Color(0xFFC084FC);
+  @override Color get accentDim   => const Color(0xFF7C3AED);
+  @override Color get textPrimary => const Color(0xFFF0E6FF);
+  @override Color get textMuted   => const Color(0xFF8B7AAE);
+  @override Color get textDim     => const Color(0xFF2D1F45);
+  @override Color get errorRed    => const Color(0xFFFF4444);
+  @override Color get warnYellow  => const Color(0xFFFFB800);
+  @override Color get hp          => const Color(0xFFFF4444);
+  @override Color get mp          => const Color(0xFF4488FF);
+  @override String get fontFamily => 'monospace';
+
+  @override String get labelConnected    => 'HP: MAX';
+  @override String get labelReconnecting => 'HP: LOW';
+  @override String get labelNoSessions   => '// NO PARTY MEMBERS';
+  @override String get labelSpawnHint    => '[ + ] summon an agent';
+  @override String get labelNewSession   => 'summon';
+  @override String get labelSelectCli    => '// choose class';
+  @override String get labelSettings     => '// config';
+  @override String get labelKill         => 'exile';
+  @override String sessionCountLabel(int count) => '$count MP';
+  @override String cliDisplayName(String cli) => switch (cli) {
+        'claude'  => '[MGR] $cli',
+        'codex'   => '[WIZ] $cli',
+        'copilot' => '[RGE] $cli',
+        'gemini'  => '[ORC] $cli',
+        _         => cli,
+      };
+}
+
+// ── Shared widgets ────────────────────────────────────────────────────────
+
+/// Hairline divider — reads border colour from MaterialApp theme.
 class TDivider extends StatelessWidget {
   const TDivider({super.key});
   @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: T.border);
+  Widget build(BuildContext context) => Divider(
+        height: 1,
+        thickness: 1,
+        color: Theme.of(context).dividerColor,
+      );
 }
 
-/// Read the current UI font size from [SettingsProvider] (watch, not read).
-double uiFontSize(BuildContext context) =>
-    context.watch<SettingsProvider>().uiFontSize;
-
-/// Small monospaced status badge: green dot + label.
+/// Small status badge — reads colours from MaterialApp colorScheme.
 class StatusDot extends StatelessWidget {
   final bool active;
   final String label;
   const StatusDot({super.key, required this.active, required this.label});
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: active ? T.accent : T.errorRed,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(label, style: T.monoSm(color: active ? T.accent : T.errorRed)),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = active ? cs.primary : cs.error;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: color)),
+      ],
+    );
+  }
 }

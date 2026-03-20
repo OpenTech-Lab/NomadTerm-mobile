@@ -64,47 +64,54 @@ class _SessionListScreenState extends State<SessionListScreen> {
     if (cli != null) ws.spawn(cli);
   }
 
-  Future<String?> _showCliPicker() => showDialog<String>(
-    context: context,
-    builder: (ctx) => Dialog(
-      backgroundColor: T.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: T.border))),
-            child: Text('select ai cli', style: T.monoSm(color: T.textMuted)),
-          ),
-          // Options
-          ..._cliTools.map((tool) => InkWell(
-            onTap: () => Navigator.pop(ctx, tool),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: T.border)),
+  Future<String?> _showCliPicker() {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final dth = ctx.watch<SettingsProvider>().nomadTheme;
+        return Dialog(
+          backgroundColor: dth.surface,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: dth.border)),
+                ),
+                child: Text(dth.labelSelectCli, style: dth.monoSm(color: dth.textMuted)),
               ),
-              child: Row(children: [
-                Text('> ', style: T.monoMd(color: T.accent)),
-                Text(tool, style: T.monoMd()),
-              ]),
-            ),
-          )),
-          // Cancel
-          InkWell(
-            onTap: () => Navigator.pop(ctx),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Text('  cancel', style: T.monoSm(color: T.textMuted)),
-            ),
+              // Options
+              ..._cliTools.map((tool) => InkWell(
+                onTap: () => Navigator.pop(ctx, tool),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border(bottom: BorderSide(color: dth.border)),
+                  ),
+                  child: Row(children: [
+                    Text('> ', style: dth.monoMd(color: dth.accent)),
+                    Text(dth.cliDisplayName(tool), style: dth.monoMd()),
+                  ]),
+                ),
+              )),
+              // Cancel
+              InkWell(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Text('  cancel', style: dth.monoSm(color: dth.textMuted)),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        );
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -115,18 +122,20 @@ class _SessionListScreenState extends State<SessionListScreen> {
   @override
   Widget build(BuildContext context) {
     final ws  = context.watch<WsService>();
-    final fsz = context.watch<SettingsProvider>().uiFontSize;
+    final sp  = context.watch<SettingsProvider>();
+    final th  = sp.nomadTheme;
+    final fsz = sp.uiFontSize;
 
     return Scaffold(
-      backgroundColor: T.bg,
+      backgroundColor: th.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(children: [
-          Text('nomadterm', style: T.monoMd(color: T.accent, size: fsz)),
+          Text('nomadterm', style: th.monoMd(color: th.accent, size: fsz)),
           const SizedBox(width: 12),
           Text(
-            '${_sessions.length} session${_sessions.length == 1 ? '' : 's'}',
-            style: T.monoSm(size: fsz - 2),
+            th.sessionCountLabel(_sessions.length),
+            style: th.monoSm(size: fsz - 2),
           ),
         ]),
         actions: [
@@ -134,12 +143,12 @@ class _SessionListScreenState extends State<SessionListScreen> {
             padding: const EdgeInsets.only(right: 4),
             child: StatusDot(
               active: ws.isConnected,
-              label: ws.isConnected ? 'connected' : 'reconnecting',
+              label: ws.isConnected ? th.labelConnected : th.labelReconnecting,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.tune, size: 16),
-            tooltip: 'settings',
+            tooltip: th.labelSettings,
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => const SettingsScreen(),
             )),
@@ -151,28 +160,28 @@ class _SessionListScreenState extends State<SessionListScreen> {
         ),
       ),
       body: _sessions.isEmpty
-          ? _buildEmpty()
-          : _buildList(ws),
+          ? _buildEmpty(th)
+          : _buildList(ws, th),
       floatingActionButton: FloatingActionButton(
         onPressed: _spawnSession,
-        tooltip: 'new session',
+        tooltip: th.labelNewSession,
         child: const Icon(Icons.add, size: 20),
       ),
     );
   }
 
-  Widget _buildEmpty() => Center(
+  Widget _buildEmpty(NomadTheme th) => Center(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('no active sessions', style: T.monoMd(color: T.textMuted)),
+        Text(th.labelNoSessions, style: th.monoMd(color: th.textMuted)),
         const SizedBox(height: 8),
-        Text('tap + to spawn an ai cli', style: T.monoSm()),
+        Text(th.labelSpawnHint, style: th.monoSm()),
       ],
     ),
   );
 
-  Widget _buildList(WsService ws) => ListView.separated(
+  Widget _buildList(WsService ws, NomadTheme th) => ListView.separated(
     itemCount: _sessions.length,
     separatorBuilder: (ctx, i) => const TDivider(),
     itemBuilder: (_, i) {
@@ -203,6 +212,7 @@ class _SessionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final th      = context.watch<SettingsProvider>().nomadTheme;
     final running = session.isRunning;
 
     return InkWell(
@@ -210,45 +220,37 @@ class _SessionTile extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Row(children: [
-          // Status indicator
           Container(
             width: 6,
             height: 6,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: running ? T.accent : T.textMuted,
+              color: running ? th.accent : th.textMuted,
             ),
           ),
           const SizedBox(width: 12),
 
-          // CLI name + status
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(session.cli, style: T.monoMd()),
+                Text(th.cliDisplayName(session.cli), style: th.monoMd()),
                 const SizedBox(height: 2),
-                Text(session.status, style: T.monoSm()),
+                Text(session.status, style: th.monoSm()),
               ],
             ),
           ),
 
-          // Session ID (short)
-          Text(
-            session.id.substring(0, 8),
-            style: T.monoSm(color: T.textDim),
-          ),
+          Text(session.id.substring(0, 8), style: th.monoSm(color: th.textDim)),
           const SizedBox(width: 16),
 
-          // Kill button
           GestureDetector(
             onTap: onKill,
-            child: Text('✕', style: T.monoSm(color: T.textMuted, size: 13)),
+            child: Text(th.labelKill, style: th.monoSm(color: th.textMuted, size: 13)),
           ),
           const SizedBox(width: 8),
 
-          // Arrow
-          Text('›', style: T.monoMd(color: T.textMuted)),
+          Text('›', style: th.monoMd(color: th.textMuted)),
         ]),
       ),
     );
