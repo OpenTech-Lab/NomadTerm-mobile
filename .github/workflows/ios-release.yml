@@ -147,6 +147,9 @@ jobs:
           APPLE_API_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_BASE64 }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
           IOS_BUILD_NUMBER: ${{ github.run_number }}
+          # Set by the signing step via $GITHUB_ENV; listed here for clarity.
+          IOS_PROVISIONING_PROFILE_NAME: ${{ env.IOS_PROVISIONING_PROFILE_NAME }}
+          IOS_PROVISIONING_PROFILE_UUID: ${{ env.IOS_PROVISIONING_PROFILE_UUID }}
         run: bundle exec fastlane release
 
       - name: Print gym log tail on failure
