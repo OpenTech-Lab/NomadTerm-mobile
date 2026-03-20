@@ -63,3 +63,7 @@ Once connected, the app lets you:
 - Default server port is `7681`
 - The connect screen is optimized for the Tailscale flow, so the default host hint is `100.x.x.x`
 - The supported session types in the UI are `claude`, `codex`, `copilot`, and `gemini`
+
+## License
+
+[MIT](LICENSE)
