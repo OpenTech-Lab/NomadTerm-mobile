@@ -77,12 +77,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _connectWith(ConnectionConfig config) {
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => ChangeNotifierProvider(
-        create: (_) => WsService(config)..connect(),
-        child: const SessionListScreen(),
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider(
+          create: (_) => WsService(config)..connect(),
+          child: const SessionListScreen(),
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _renameRepo(ConnectionConfig repo, String newName) async {
@@ -139,9 +141,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         token: uri.queryParameters['token'] ?? '',
         useTls: uri.queryParameters['tls'] == '1',
         repoId: uri.queryParameters['repo_id'] ?? '',
-        repoPath: Uri.decodeComponent(uri.queryParameters['repo_path'] ?? ''),
-        repoName: Uri.decodeComponent(uri.queryParameters['repo_name'] ?? ''),
-        expiresAt: (expiresStr != null ? DateTime.tryParse(expiresStr) : null) ??
+        repoPath: uri.queryParameters['repo_path'] ?? '',
+        repoName: uri.queryParameters['repo_name'] ?? '',
+        expiresAt:
+            (expiresStr != null ? DateTime.tryParse(expiresStr) : null) ??
             DateTime.now().add(const Duration(days: 30)),
       );
     } else if (uri.scheme == 'ws' || uri.scheme == 'wss') {
@@ -167,64 +170,64 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // ── QR scanner overlay ───────────────────────────────────────────────
   Widget _buildScanner(NomadTheme th) => Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          leading: IconButton(
-            icon: Icon(Icons.close, size: 18, color: th.accent),
-            onPressed: _stopScanning,
-          ),
-          title: Text('scan qr', style: th.monoMd(color: th.accent)),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.flashlight_on, size: 20, color: th.accent),
-              onPressed: () => _scannerController.toggleTorch(),
-              tooltip: 'toggle torch',
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      leading: IconButton(
+        icon: Icon(Icons.close, size: 18, color: th.accent),
+        onPressed: _stopScanning,
+      ),
+      title: Text('scan qr', style: th.monoMd(color: th.accent)),
+      actions: [
+        IconButton(
+          icon: Icon(Icons.flashlight_on, size: 20, color: th.accent),
+          onPressed: () => _scannerController.toggleTorch(),
+          tooltip: 'toggle torch',
+        ),
+      ],
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: TDivider(),
+      ),
+    ),
+    body: Stack(
+      fit: StackFit.expand,
+      children: [
+        MobileScanner(
+          controller: _scannerController,
+          onDetect: (capture) {
+            final barcode = capture.barcodes.firstOrNull;
+            if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
+          },
+        ),
+        AnimatedBuilder(
+          animation: _scanLineController,
+          builder: (context, child) => CustomPaint(
+            painter: _QrScanOverlayPainter(
+              accentColor: th.accent,
+              scanProgress: _scanLineController.value,
             ),
-          ],
-          bottom: const PreferredSize(
-            preferredSize: Size.fromHeight(1),
-            child: TDivider(),
           ),
         ),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            MobileScanner(
-              controller: _scannerController,
-              onDetect: (capture) {
-                final barcode = capture.barcodes.firstOrNull;
-                if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
-              },
-            ),
-            AnimatedBuilder(
-              animation: _scanLineController,
-              builder: (_, __) => CustomPaint(
-                painter: _QrScanOverlayPainter(
-                  accentColor: th.accent,
-                  scanProgress: _scanLineController.value,
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 52,
-              left: 0,
-              right: 0,
-              child: Text(
-                'align qr code within the frame',
-                textAlign: TextAlign.center,
-                style: th.monoSm(color: Colors.white70, size: 13),
-              ),
-            ),
-          ],
+        Positioned(
+          bottom: 52,
+          left: 0,
+          right: 0,
+          child: Text(
+            'align qr code within the frame',
+            textAlign: TextAlign.center,
+            style: th.monoSm(color: Colors.white70, size: 13),
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   // ── Main screen ──────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final sp  = context.watch<SettingsProvider>();
-    final th  = sp.nomadTheme;
+    final sp = context.watch<SettingsProvider>();
+    final th = sp.nomadTheme;
     final fsz = sp.uiFontSize;
 
     if (_scanning) return _buildScanner(th);
@@ -240,33 +243,47 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               const SizedBox(height: 24),
 
               // ── Header ────────────────────────────────────────────
-              Text('nomadterm',
-                  style: th.monoLg(color: th.accent, size: fsz + 8, weight: FontWeight.bold)),
+              Text(
+                'nomadterm',
+                style: th.monoLg(
+                  color: th.accent,
+                  size: fsz + 8,
+                  weight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('remote ai terminal  ${_version.isNotEmpty ? 'v$_version' : ''}',
-                  style: th.monoSm(size: fsz - 2)),
+              Text(
+                'remote ai terminal  ${_version.isNotEmpty ? 'v$_version' : ''}',
+                style: th.monoSm(size: fsz - 2),
+              ),
               const SizedBox(height: 36),
 
               // ── Quick connect ─────────────────────────────────────
-              Text('// quick connect',
-                  style: th.monoSm(color: th.textDim, size: fsz - 3)),
+              Text(
+                '// quick connect',
+                style: th.monoSm(color: th.textDim, size: fsz - 3),
+              ),
               const SizedBox(height: 10),
 
               if (_savedRepos.isEmpty)
                 _EmptyHistory(th: th, fsz: fsz)
               else
-                ..._savedRepos.map((repo) => _SavedRepoTile(
-                      repo: repo,
-                      fontSize: fsz,
-                      onTap: () => _connectWith(repo),
-                      onShowEdit: () => _showEditSheet(repo),
-                    )),
+                ..._savedRepos.map(
+                  (repo) => _SavedRepoTile(
+                    repo: repo,
+                    fontSize: fsz,
+                    onTap: () => _connectWith(repo),
+                    onShowEdit: () => _showEditSheet(repo),
+                  ),
+                ),
 
               const SizedBox(height: 28),
 
               // ── Add new connection ────────────────────────────────
-              Text('// add connection',
-                  style: th.monoSm(color: th.textDim, size: fsz - 3)),
+              Text(
+                '// add connection',
+                style: th.monoSm(color: th.textDim, size: fsz - 3),
+              ),
               const SizedBox(height: 10),
               _TermButton(
                 label: '\$ scan-qr',
@@ -304,10 +321,15 @@ class _EmptyHistory extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('no saved connections', style: th.monoMd(color: th.textMuted, size: fsz)),
+          Text(
+            'no saved connections',
+            style: th.monoMd(color: th.textMuted, size: fsz),
+          ),
           const SizedBox(height: 4),
-          Text('scan the qr code from the daemon gui to connect',
-              style: th.monoSm(color: th.textDim, size: fsz - 3)),
+          Text(
+            'scan the qr code from the daemon gui to connect',
+            style: th.monoSm(color: th.textDim, size: fsz - 3),
+          ),
         ],
       ),
     );
@@ -327,7 +349,7 @@ class _TermButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final th      = context.watch<SettingsProvider>().nomadTheme;
+    final th = context.watch<SettingsProvider>().nomadTheme;
     final enabled = onTap != null;
 
     return GestureDetector(
@@ -341,7 +363,10 @@ class _TermButton extends StatelessWidget {
           decoration: BoxDecoration(border: Border.all(color: th.border)),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text(label, style: th.monoMd(color: th.accent, size: fontSize)),
+          child: Text(
+            label,
+            style: th.monoMd(color: th.accent, size: fontSize),
+          ),
         ),
       ),
     );
@@ -359,57 +384,57 @@ class _QrScanOverlayPainter extends CustomPainter {
     required this.scanProgress,
   });
 
-  static const _frameSize   = 260.0;
-  static const _cornerLen   = 26.0;
+  static const _frameSize = 260.0;
+  static const _cornerLen = 26.0;
   static const _cornerThick = 3.0;
-  static const _dimAlpha    = 0.72;
+  static const _dimAlpha = 0.72;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx    = size.width  / 2;
-    final cy    = size.height / 2;
-    final left  = cx - _frameSize / 2;
-    final top   = cy - _frameSize / 2;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final left = cx - _frameSize / 2;
+    final top = cy - _frameSize / 2;
     final right = cx + _frameSize / 2;
-    final bot   = cy + _frameSize / 2;
+    final bot = cy + _frameSize / 2;
 
     // ── dim surround ──────────────────────────────────────────────────
-    final dimPaint = Paint()..color = Colors.black.withOpacity(_dimAlpha);
-    canvas.drawRect(Rect.fromLTRB(0,     0,          size.width,  top),         dimPaint);
-    canvas.drawRect(Rect.fromLTRB(0,     bot,        size.width,  size.height), dimPaint);
-    canvas.drawRect(Rect.fromLTRB(0,     top,        left,        bot),         dimPaint);
-    canvas.drawRect(Rect.fromLTRB(right, top,        size.width,  bot),         dimPaint);
+    final dimPaint = Paint()..color = Colors.black.withValues(alpha: _dimAlpha);
+    canvas.drawRect(Rect.fromLTRB(0, 0, size.width, top), dimPaint);
+    canvas.drawRect(Rect.fromLTRB(0, bot, size.width, size.height), dimPaint);
+    canvas.drawRect(Rect.fromLTRB(0, top, left, bot), dimPaint);
+    canvas.drawRect(Rect.fromLTRB(right, top, size.width, bot), dimPaint);
 
     // ── corner brackets ───────────────────────────────────────────────
     final cp = Paint()
-      ..color       = accentColor
+      ..color = accentColor
       ..strokeWidth = _cornerThick
-      ..style       = PaintingStyle.stroke
-      ..strokeCap   = StrokeCap.square;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square;
 
     // top-left
-    canvas.drawLine(Offset(left,               top + _cornerLen), Offset(left,               top),               cp);
-    canvas.drawLine(Offset(left,               top),              Offset(left  + _cornerLen, top),               cp);
+    canvas.drawLine(Offset(left, top + _cornerLen), Offset(left, top), cp);
+    canvas.drawLine(Offset(left, top), Offset(left + _cornerLen, top), cp);
     // top-right
-    canvas.drawLine(Offset(right - _cornerLen, top),              Offset(right,              top),               cp);
-    canvas.drawLine(Offset(right,              top),              Offset(right,              top + _cornerLen),  cp);
+    canvas.drawLine(Offset(right - _cornerLen, top), Offset(right, top), cp);
+    canvas.drawLine(Offset(right, top), Offset(right, top + _cornerLen), cp);
     // bottom-left
-    canvas.drawLine(Offset(left,               bot - _cornerLen), Offset(left,               bot),               cp);
-    canvas.drawLine(Offset(left,               bot),              Offset(left  + _cornerLen, bot),               cp);
+    canvas.drawLine(Offset(left, bot - _cornerLen), Offset(left, bot), cp);
+    canvas.drawLine(Offset(left, bot), Offset(left + _cornerLen, bot), cp);
     // bottom-right
-    canvas.drawLine(Offset(right - _cornerLen, bot),              Offset(right,              bot),               cp);
-    canvas.drawLine(Offset(right,              bot - _cornerLen), Offset(right,              bot),               cp);
+    canvas.drawLine(Offset(right - _cornerLen, bot), Offset(right, bot), cp);
+    canvas.drawLine(Offset(right, bot - _cornerLen), Offset(right, bot), cp);
 
     // ── animated scan line ────────────────────────────────────────────
     final lineY = top + scanProgress * _frameSize;
     final linePaint = Paint()
       ..shader = LinearGradient(
-          colors: [
-            accentColor.withOpacity(0.0),
-            accentColor.withOpacity(0.85),
-            accentColor.withOpacity(0.0),
-          ],
-        ).createShader(Rect.fromLTWH(left, lineY - 1, _frameSize, 2));
+        colors: [
+          accentColor.withValues(alpha: 0.0),
+          accentColor.withValues(alpha: 0.85),
+          accentColor.withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromLTWH(left, lineY - 1, _frameSize, 2));
     canvas.drawRect(Rect.fromLTWH(left, lineY - 1, _frameSize, 2.5), linePaint);
   }
 
@@ -455,8 +480,8 @@ class _EditSheetState extends State<_EditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final sp  = context.watch<SettingsProvider>();
-    final th  = sp.nomadTheme;
+    final sp = context.watch<SettingsProvider>();
+    final th = sp.nomadTheme;
     final fsz = sp.uiFontSize;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
@@ -466,12 +491,17 @@ class _EditSheetState extends State<_EditSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('// edit connection',
-              style: th.monoSm(color: th.textDim, size: fsz - 3)),
+          Text(
+            '// edit connection',
+            style: th.monoSm(color: th.textDim, size: fsz - 3),
+          ),
           const SizedBox(height: 16),
 
           // ── name field ─────────────────────────────────────────
-          Text('name', style: th.monoSm(color: th.textMuted, size: fsz - 3)),
+          Text(
+            'name',
+            style: th.monoSm(color: th.textMuted, size: fsz - 3),
+          ),
           const SizedBox(height: 6),
           TextField(
             controller: _nameCtrl,
@@ -534,7 +564,10 @@ class _SheetButton extends StatelessWidget {
         decoration: BoxDecoration(border: Border.all(color: color)),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: Text(label, style: th.monoMd(color: color, size: fsz)),
+        child: Text(
+          label,
+          style: th.monoMd(color: color, size: fsz),
+        ),
       ),
     );
   }
@@ -555,8 +588,8 @@ class _SavedRepoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final th      = context.watch<SettingsProvider>().nomadTheme;
-    final name    = repo.repoName.isNotEmpty ? repo.repoName : repo.host;
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    final name = repo.repoName.isNotEmpty ? repo.repoName : repo.host;
     final expires = repo.expiresAt != null
         ? 'exp ${repo.expiresAt!.toLocal().toString().substring(0, 10)}'
         : '';
@@ -572,13 +605,18 @@ class _SavedRepoTile extends StatelessWidget {
               onTap: onTap,
               behavior: HitTestBehavior.opaque,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(name, style: th.monoMd(size: fontSize)),
-                    Text('${repo.host}:${repo.port}  $expires',
-                        style: th.monoSm(color: th.textMuted, size: fontSize - 3)),
+                    Text(
+                      '${repo.host}:${repo.port}  $expires',
+                      style: th.monoSm(color: th.textMuted, size: fontSize - 3),
+                    ),
                   ],
                 ),
               ),

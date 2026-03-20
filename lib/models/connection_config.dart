@@ -22,8 +22,13 @@ class ConnectionConfig {
     this.expiresAt,
   });
 
-  String get wsUrl =>
-      '${useTls ? 'wss' : 'ws'}://$host:$port/ws';
+  String get wsUrl => Uri(
+    scheme: useTls ? 'wss' : 'ws',
+    host: host,
+    port: port,
+    path: '/ws',
+    queryParameters: token.isNotEmpty ? {'token': token} : null,
+  ).toString();
 
   ConnectionConfig copyWith({
     String? host,
@@ -34,15 +39,14 @@ class ConnectionConfig {
     String? repoPath,
     String? repoName,
     DateTime? expiresAt,
-  }) =>
-      ConnectionConfig(
-        host: host ?? this.host,
-        port: port ?? this.port,
-        token: token ?? this.token,
-        useTls: useTls ?? this.useTls,
-        repoId: repoId ?? this.repoId,
-        repoPath: repoPath ?? this.repoPath,
-        repoName: repoName ?? this.repoName,
-        expiresAt: expiresAt ?? this.expiresAt,
-      );
+  }) => ConnectionConfig(
+    host: host ?? this.host,
+    port: port ?? this.port,
+    token: token ?? this.token,
+    useTls: useTls ?? this.useTls,
+    repoId: repoId ?? this.repoId,
+    repoPath: repoPath ?? this.repoPath,
+    repoName: repoName ?? this.repoName,
+    expiresAt: expiresAt ?? this.expiresAt,
+  );
 }
