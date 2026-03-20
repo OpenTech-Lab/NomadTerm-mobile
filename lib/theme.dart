@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/settings_provider.dart';
 
 /// Central design tokens — pure black professional terminal style.
 abstract final class T {
@@ -97,6 +99,10 @@ class TDivider extends StatelessWidget {
   Widget build(BuildContext context) =>
       const Divider(height: 1, thickness: 1, color: T.border);
 }
+
+/// Read the current UI font size from [SettingsProvider] (watch, not read).
+double uiFontSize(BuildContext context) =>
+    context.watch<SettingsProvider>().uiFontSize;
 
 /// Small monospaced status badge: green dot + label.
 class StatusDot extends StatelessWidget {

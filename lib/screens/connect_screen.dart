@@ -109,23 +109,23 @@ class _ConnectScreenState extends State<ConnectScreen> {
               const SizedBox(height: 24),
 
               // ── Logo / header ──────────────────────────────────────
-              Text('nomadterm', style: T.monoLg(color: T.accent, size: 22, weight: FontWeight.bold)),
+              Text('nomadterm', style: T.monoLg(color: T.accent, size: uiFontSize(context) + 8, weight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text('remote ai terminal  v0.1.0', style: T.monoSm()),
+              Text('remote ai terminal  v0.1.0', style: T.monoSm(size: uiFontSize(context) - 2)),
               const SizedBox(height: 32),
 
               // ── Section label ──────────────────────────────────────
-              Text('// connect to daemon', style: T.monoSm(color: T.textDim, size: 11)),
+              Text('// connect to daemon', style: T.monoSm(color: T.textDim, size: uiFontSize(context) - 3)),
               const SizedBox(height: 16),
 
               // ── Fields ─────────────────────────────────────────────
-              _TermField(label: 'host', controller: _hostCtrl, hint: '100.x.x.x'),
+              _TermField(label: 'host', controller: _hostCtrl, hint: '100.x.x.x', fontSize: uiFontSize(context)),
               const SizedBox(height: 10),
               _TermField(label: 'port', controller: _portCtrl, hint: '7681',
-                  keyboardType: TextInputType.number),
+                  keyboardType: TextInputType.number, fontSize: uiFontSize(context)),
               const SizedBox(height: 10),
               _TermField(label: 'token', controller: _tokenCtrl, hint: 'bearer token',
-                  obscure: false),
+                  obscure: false, fontSize: uiFontSize(context)),
 
               // ── Error ──────────────────────────────────────────────
               if (_error != null) ...[
@@ -133,7 +133,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 Row(children: [
                   const Icon(Icons.error_outline, size: 12, color: T.errorRed),
                   const SizedBox(width: 6),
-                  Text(_error!, style: T.monoSm(color: T.errorRed)),
+                  Text(_error!, style: T.monoSm(color: T.errorRed, size: uiFontSize(context) - 2)),
                 ]),
               ],
 
@@ -145,17 +145,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
                 onTap: _connecting ? null : _connect,
                 primary: true,
                 loading: _connecting,
+                fontSize: uiFontSize(context),
               ),
               const SizedBox(height: 10),
               _TermButton(
                 label: '\$ scan-qr',
                 onTap: () => setState(() => _scanning = true),
+                fontSize: uiFontSize(context),
               ),
 
               const SizedBox(height: 40),
               Text(
                 'start daemon: nomadterm --ws --bind-tailscale',
-                style: T.monoSm(size: 10),
+                style: T.monoSm(size: uiFontSize(context) - 3),
               ),
             ],
           ),
@@ -173,11 +175,13 @@ class _TermField extends StatelessWidget {
   final String hint;
   final TextInputType keyboardType;
   final bool obscure;
+  final double fontSize;
 
   const _TermField({
     required this.label,
     required this.controller,
     required this.hint,
+    required this.fontSize,
     this.keyboardType = TextInputType.text,
     this.obscure = false,
   });
@@ -188,18 +192,18 @@ class _TermField extends StatelessWidget {
     children: [
       Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Text(label, style: T.monoSm(color: T.textMuted, size: 11)),
+        child: Text(label, style: T.monoSm(color: T.textMuted, size: fontSize - 3)),
       ),
       TextField(
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscure,
-        style: T.monoMd(),
+        style: T.monoMd(size: fontSize),
         cursorColor: T.accent,
         decoration: InputDecoration(
           hintText: hint,
           prefixText: '> ',
-          prefixStyle: T.monoMd(color: T.accent),
+          prefixStyle: T.monoMd(color: T.accent, size: fontSize),
         ),
       ),
     ],
@@ -211,10 +215,12 @@ class _TermButton extends StatelessWidget {
   final VoidCallback? onTap;
   final bool primary;
   final bool loading;
+  final double fontSize;
 
   const _TermButton({
     required this.label,
     required this.onTap,
+    required this.fontSize,
     this.primary = false,
     this.loading = false,
   });
@@ -249,7 +255,7 @@ class _TermButton extends StatelessWidget {
                     color: fg,
                   ),
                 )
-              : Text(label, style: T.monoMd(color: fg)),
+              : Text(label, style: T.monoMd(color: fg, size: fontSize)),
         ),
       ),
     );

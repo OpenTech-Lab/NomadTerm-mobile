@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 
 import '../models/session.dart';
+import '../providers/settings_provider.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
 
@@ -67,6 +68,9 @@ class _TerminalScreenState extends State<TerminalScreen> {
           controller: _controller,
           autofocus: true,
           padding: const EdgeInsets.all(4),
+          textStyle: TerminalStyle(
+            fontSize: context.watch<SettingsProvider>().termFontSize,
+          ),
           theme: _termTheme,
         ),
       ),

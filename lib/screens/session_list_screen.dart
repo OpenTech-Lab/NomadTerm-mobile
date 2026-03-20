@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/session.dart';
+import '../providers/settings_provider.dart';
 import '../services/notification_service.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
 import '../widgets/approve_dialog.dart';
+import 'settings_screen.dart';
 import 'terminal_screen.dart';
 
 const _cliTools = ['claude', 'codex', 'copilot', 'gemini'];
@@ -112,27 +114,35 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ws = context.watch<WsService>();
+    final ws  = context.watch<WsService>();
+    final fsz = context.watch<SettingsProvider>().uiFontSize;
 
     return Scaffold(
       backgroundColor: T.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Row(children: [
-          Text('nomadterm', style: T.monoMd(color: T.accent)),
+          Text('nomadterm', style: T.monoMd(color: T.accent, size: fsz)),
           const SizedBox(width: 12),
           Text(
             '${_sessions.length} session${_sessions.length == 1 ? '' : 's'}',
-            style: T.monoSm(),
+            style: T.monoSm(size: fsz - 2),
           ),
         ]),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 4),
             child: StatusDot(
               active: ws.isConnected,
               label: ws.isConnected ? 'connected' : 'reconnecting',
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune, size: 16),
+            tooltip: 'settings',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const SettingsScreen(),
+            )),
           ),
         ],
         bottom: const PreferredSize(

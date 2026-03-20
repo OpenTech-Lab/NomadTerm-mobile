@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:mobile/main.dart';
+import 'package:mobile/providers/settings_provider.dart';
 
 void main() {
   testWidgets('Shows ConnectScreen when no saved config', (tester) async {
-    // No savedConfig → should render ConnectScreen (has "NomadTerm" title text).
-    await tester.pumpWidget(const NomadTermApp(savedConfig: null));
-    expect(find.text('NomadTerm'), findsOneWidget);
+    final settings = SettingsProvider();
+    await tester.pumpWidget(NomadTermApp(savedConfig: null, settings: settings));
+    expect(find.text('nomadterm'), findsOneWidget);
   });
 }
