@@ -177,3 +177,42 @@ jobs:
           retention-days: 14
           path: |
             /Users/runner/Library/Logs/gym/Runner-Runner.log
+
+  create-release:
+    name: Create GitHub Release
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          NOTES_FILE="scripts/version/${TAG#v}.md"
+          TITLE="NomadTerm Mobile ${TAG}"
+
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            # Release already exists (re-run) — update notes if the file is present
+            if [[ -f "${NOTES_FILE}" ]]; then
+              gh release edit "${TAG}" --title "${TITLE}" --notes-file "${NOTES_FILE}"
+            fi
+            exit 0
+          fi
+
+          if [[ -f "${NOTES_FILE}" ]]; then
+            gh release create "${TAG}" \
+              --title "${TITLE}" \
+              --notes-file "${NOTES_FILE}" \
+              --verify-tag
+          else
+            gh release create "${TAG}" \
+              --title "${TITLE}" \
+              --generate-notes \
+              --verify-tag
+          fi
