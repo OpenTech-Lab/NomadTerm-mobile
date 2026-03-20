@@ -108,9 +108,27 @@ platform :ios do
     end
 
     # --- Upload to TestFlight ---
-    upload_to_testflight(
-      api_key:                          api_key,
-      skip_waiting_for_build_processing: true,
-    )
+    changelog = ENV["TESTFLIGHT_CHANGELOG"].to_s.strip
+    testflight_groups = ENV.fetch("TESTFLIGHT_GROUPS", "")
+      .split(",")
+      .map(&:strip)
+      .reject(&:empty?)
+
+    upload_options = {
+      api_key: api_key,
+      skip_waiting_for_build_processing: false,
+    }
+
+    upload_options[:changelog] = changelog unless changelog.empty?
+
+    if testflight_groups.empty?
+      UI.important("TESTFLIGHT_GROUPS not set; build will upload and finish processing, but tester assignment remains manual in App Store Connect.")
+    else
+      UI.message("Distributing build to TestFlight groups: #{testflight_groups.join(', ')}")
+      upload_options[:groups] = testflight_groups
+      upload_options[:distribute_external] = false
+    end
+
+    upload_to_testflight(**upload_options)
   end
 end
