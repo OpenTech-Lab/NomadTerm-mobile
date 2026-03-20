@@ -33,85 +33,6 @@ target 'Runner' do
 end
 
 post_install do |installer|
-  # Fix "Multiple commands produce libsuper_native_extensions.a".
-  #
-  # We need both parts of the plugin during archive:
-  # 1. the normal CocoaPods static library containing `SuperNativeExtensionsPlugin`
-  # 2. the Rust archive produced by cargokit.
-  #
-  # Xcode 16 rejects the shell-script phase and the pod static-library target
-  # when they both claim `${BUILT_PRODUCTS_DIR}/libsuper_native_extensions.a`.
-  # Keep a single Rust build phase, rewrite its declared output to a dedicated
-  # sibling directory, and copy the Rust archive there immediately after the
-  # script runs. The pod target can then still emit the normal
-  # `libsuper_native_extensions.a` product used for ObjC/Swift symbols, while
-  # the generated xcconfigs force-load the preserved Rust archive from the new
-  # path.
-  rust_dest_var = '${PODS_CONFIGURATION_BUILD_DIR}/super_native_extensions_rust'
-  rust_lib_var = "#{rust_dest_var}/libsuper_native_extensions.a"
-
-  sne_phase_matches = []
-  installer.pods_project.targets.each do |target|
-    target.build_phases.each do |phase|
-      next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
-      next unless phase.name&.include?('Build SuperNativeExtensions') ||
-                  (phase.output_paths || []).any? { |path| path.include?('libsuper_native_extensions') }
-
-      sne_phase_matches << [target, phase]
-    end
-  end
-
-  preferred_match = sne_phase_matches.find { |target, _phase| target.name == 'super_native_extensions' }
-  preferred_match ||= sne_phase_matches.first
-
-  installer.pods_project.targets.each do |target|
-    phases_to_remove = []
-
-    target.build_phases.each do |phase|
-      match = [target, phase]
-      next unless sne_phase_matches.include?(match)
-
-      unless match == preferred_match
-        phases_to_remove << phase
-        next
-      end
-
-      phase.output_paths = [rust_lib_var]
-
-      next if phase.shell_script.to_s.include?('super_native_extensions_rust')
-
-      phase.shell_script = phase.shell_script.to_s.rstrip + "\n" + <<~'COPY_RUST_LIB'
-        # Preserve the Rust archive separately so the pod's normal static library
-        # can still provide `SuperNativeExtensionsPlugin` to the app link.
-        _sne_rust_dest="${PODS_CONFIGURATION_BUILD_DIR}/super_native_extensions_rust"
-        mkdir -p "$_sne_rust_dest"
-        if [ -f "${BUILT_PRODUCTS_DIR}/libsuper_native_extensions.a" ]; then
-          cp "${BUILT_PRODUCTS_DIR}/libsuper_native_extensions.a" \
-             "$_sne_rust_dest/libsuper_native_extensions.a"
-        fi
-      COPY_RUST_LIB
-    end
-
-    phases_to_remove.each { |phase| target.build_phases.delete(phase) }
-  end
-
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      xcconfig_ref = config.base_configuration_reference
-      next unless xcconfig_ref
-
-      xcconfig_path = xcconfig_ref.real_path.to_s
-      next unless File.exist?(xcconfig_path)
-
-      content = File.read(xcconfig_path)
-      old_flag = '-force_load ${BUILT_PRODUCTS_DIR}/libsuper_native_extensions.a'
-      new_flag = "-force_load #{rust_lib_var}"
-      next unless content.include?(old_flag)
-
-      File.write(xcconfig_path, content.gsub(old_flag, new_flag))
-    end
-  end
-
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
@@ -139,6 +60,11 @@ post_install do |installer|
         warning_cflags << '-Wno-shorten-64-to-32' unless warning_cflags.include?('-Wno-shorten-64-to-32')
         config.build_settings['WARNING_CFLAGS'] = warning_cflags
       end
+
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)',
+        'PERMISSION_LOCATION=1',
+        'PERMISSION_BLUETOOTH=1',
+      ]
     end
   end
 end

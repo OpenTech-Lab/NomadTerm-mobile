@@ -6,6 +6,16 @@ default_platform(:ios)
 platform :ios do
   desc "Build Flutter iOS app and upload to TestFlight"
   lane :release do
+    ios_root = if ENV["GITHUB_WORKSPACE"].to_s.empty?
+      File.expand_path("..", __dir__)
+    else
+      File.join(ENV.fetch("GITHUB_WORKSPACE"), "ios")
+    end
+    project_root = File.expand_path("..", ios_root)
+    runner_xcodeproj = File.join(ios_root, "Runner.xcodeproj")
+    runner_xcodeproj_file = File.join(runner_xcodeproj, "project.pbxproj")
+    runner_workspace = File.join(ios_root, "Runner.xcworkspace")
+
     # --- Apple API key (App Store Connect) ---
     api_key_path = File.join(Dir.tmpdir, "apple_api_key_#{ENV['APPLE_API_KEY_ID']}.p8")
     File.write(api_key_path, Base64.decode64(ENV.fetch("APPLE_API_PRIVATE_KEY_BASE64")))
@@ -21,13 +31,13 @@ platform :ios do
     # --- Build number ---
     increment_build_number(
       build_number: ENV.fetch("IOS_BUILD_NUMBER"),
-      xcodeproj:    "Runner.xcodeproj",
+      xcodeproj:    runner_xcodeproj,
     )
 
     # --- Prepare Flutter iOS build config without signing ---
     # `xcode_backend.sh build` can fail in archive when iOS config artifacts are
     # not prepared up front on CI. Generate config only, no archive/signing here.
-    Dir.chdir("..") do
+    Dir.chdir(project_root) do
       sh("flutter pub get")
       sh("flutter precache --ios")
       sh("flutter build ios --release --no-codesign --config-only")
@@ -40,34 +50,50 @@ platform :ios do
     if app_identifier.to_s.empty?
       UI.user_error!("app_identifier is missing. Set it in ios/fastlane/Appfile")
     end
+
+    project_bundle_id = File
+      .read(runner_xcodeproj_file)
+      .scan(/PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);/)
+      .flatten
+      .find { |identifier| !identifier.end_with?(".RunnerTests") }
+
+    if project_bundle_id.to_s.empty?
+      UI.user_error!("Unable to determine Runner PRODUCT_BUNDLE_IDENTIFIER from #{runner_xcodeproj_file}")
+    end
+
+    if app_identifier != project_bundle_id
+      UI.user_error!(
+        "Appfile app_identifier (#{app_identifier}) does not match Runner bundle identifier (#{project_bundle_id})"
+      )
+    end
+
     profile_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
     profile_uuid = ENV.fetch("IOS_PROVISIONING_PROFILE_UUID")
-
-    UI.message("Signing with profile: #{profile_name} (#{profile_uuid})")
+    # fastlane 2.232.2 still validates gym export_method against the older
+    # app-store token even though xcodebuild warns that it is deprecated.
+    export_method = "app-store"
 
     begin
       gym(
-        workspace:     "Runner.xcworkspace",
+        workspace:     runner_workspace,
         scheme:        "Runner",
         configuration: "Release",
         clean:         false,
-        export_method: "app-store",
+        export_method: export_method,
         codesigning_identity: "Apple Distribution",
         suppress_xcode_output: false,
         xcargs: {
           "DEVELOPMENT_TEAM"               => ENV.fetch("IOS_TEAM_ID"),
           "CODE_SIGN_STYLE"                => "Manual",
-          # UUID is unambiguous — avoids name-matching failures on CI.
-          "PROVISIONING_PROFILE_SPECIFIER" => profile_uuid,
+          "PROVISIONING_PROFILE_SPECIFIER" => profile_name,
+          "PROVISIONING_PROFILE"           => profile_uuid,
         },
         export_options: {
-          method:               "app-store",
+          method:               export_method,
           teamID:               ENV.fetch("IOS_TEAM_ID"),
           signingStyle:         "manual",
-          # UUID key in provisioningProfiles is looked up directly by xcodebuild;
-          # profile-name matching is fragile when names contain spaces or accents.
           provisioningProfiles: {
-            app_identifier => profile_uuid,
+            app_identifier => profile_name,
           },
           uploadSymbols:        true,
         },
