@@ -66,6 +66,10 @@ class WsService extends ChangeNotifier {
   bool _connected = false;
   bool get isConnected => _connected;
 
+  String? _lastError;
+  /// Human-readable description of the last connection failure, or null when connected.
+  String? get lastError => _lastError;
+
   /// Connect (or reconnect) to the daemon WebSocket.
   Future<void> connect() async {
     if (_disposed) return;
@@ -82,11 +86,21 @@ class WsService extends ChangeNotifier {
     try {
       await _channel!.ready;
     } catch (e) {
-      _scheduleReconnect();
+      final msg = e.toString();
+      final isAuth = msg.contains('401') ||
+          msg.toLowerCase().contains('unauthorized') ||
+          msg.toLowerCase().contains('forbidden');
+      _lastError = isAuth
+          ? 'auth failed — wrong token (401)'
+          : 'cannot reach daemon: $msg';
+      _eventController.add(WsError(_lastError!));
+      notifyListeners();
+      if (!isAuth) _scheduleReconnect(); // don't retry on auth errors
       return;
     }
 
     _connected = true;
+    _lastError = null;
     _eventController.add(WsConnected());
     notifyListeners();
 

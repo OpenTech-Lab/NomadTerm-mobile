@@ -160,7 +160,11 @@ class _SessionListScreenState extends State<SessionListScreen> {
             padding: const EdgeInsets.only(right: 4),
             child: StatusDot(
               active: ws.isConnected,
-              label: ws.isConnected ? th.labelConnected : th.labelReconnecting,
+              label: ws.isConnected
+                  ? th.labelConnected
+                  : ws.lastError != null
+                      ? ws.lastError!
+                      : th.labelReconnecting,
             ),
           ),
           IconButton(
