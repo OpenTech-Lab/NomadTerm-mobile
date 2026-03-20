@@ -296,6 +296,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 'start daemon: nomadterm --ws --bind-tailscale',
                 style: th.monoSm(size: fsz - 3),
               ),
+              const SizedBox(height: 6),
+              Text(
+                'remote access works best with tailscale on both devices',
+                style: th.monoSm(color: th.textDim, size: fsz - 4),
+              ),
             ],
           ),
         ),

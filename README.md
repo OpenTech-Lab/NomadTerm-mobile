@@ -30,6 +30,8 @@ cargo run --release -- --ws --bind-tailscale
 ```
 
 That command prints the host, port, token, and QR code needed by the app.
+If Tailscale is active, NomadTerm prefers it automatically for secure remote
+access. Otherwise the connection is LAN-only.
 
 ### 3. Run the mobile app
 
