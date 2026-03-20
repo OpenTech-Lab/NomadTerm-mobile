@@ -19,7 +19,8 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
   final _hostCtrl  = TextEditingController(text: '100.x.x.x');
   final _portCtrl  = TextEditingController(text: '7681');
   final _tokenCtrl = TextEditingController();
@@ -35,12 +36,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   List<ConnectionConfig> _savedRepos = [];
 
   late final MobileScannerController _scannerController;
+  late final AnimationController _scanLineController;
 
   @override
   void initState() {
     super.initState();
     _scannerController = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
+    );
+    _scanLineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
     );
     _loadSavedRepos();
     PackageInfo.fromPlatform().then((info) {
@@ -59,6 +65,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     _scannerController.dispose();
+    _scanLineController.dispose();
     _hostCtrl.dispose();
     _portCtrl.dispose();
     _tokenCtrl.dispose();
@@ -68,11 +75,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _startScanning() {
     _detected = false;
     _scannerController.start();
+    _scanLineController.repeat();
     setState(() => _scanning = true);
   }
 
   void _stopScanning() {
     _scannerController.stop();
+    _scanLineController.stop();
     setState(() => _scanning = false);
   }
 
@@ -155,16 +164,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── QR scanner overlay ───────────────────────────────────────────────
   Widget _buildScanner(NomadTheme th) => Scaffold(
-    backgroundColor: th.bg,
+    backgroundColor: Colors.black,
     appBar: AppBar(
+      backgroundColor: Colors.black,
       leading: IconButton(
-        icon: const Icon(Icons.close, size: 18),
+        icon: Icon(Icons.close, size: 18, color: th.accent),
         onPressed: _stopScanning,
       ),
-      title: Text('scan qr', style: th.monoMd()),
+      title: Text('scan qr', style: th.monoMd(color: th.accent)),
       actions: [
         IconButton(
-          icon: const Icon(Icons.flashlight_on, size: 20),
+          icon: Icon(Icons.flashlight_on, size: 20, color: th.accent),
           onPressed: () => _scannerController.toggleTorch(),
           tooltip: 'toggle torch',
         ),
@@ -174,12 +184,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: TDivider(),
       ),
     ),
-    body: MobileScanner(
-      controller: _scannerController,
-      onDetect: (capture) {
-        final barcode = capture.barcodes.firstOrNull;
-        if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
-      },
+    body: Stack(
+      fit: StackFit.expand,
+      children: [
+        MobileScanner(
+          controller: _scannerController,
+          onDetect: (capture) {
+            final barcode = capture.barcodes.firstOrNull;
+            if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
+          },
+        ),
+        AnimatedBuilder(
+          animation: _scanLineController,
+          builder: (_, __) => CustomPaint(
+            painter: _QrScanOverlayPainter(
+              accentColor: th.accent,
+              scanProgress: _scanLineController.value,
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: 52,
+          left: 0,
+          right: 0,
+          child: Text(
+            'align qr code within the frame',
+            textAlign: TextAlign.center,
+            style: th.monoSm(color: Colors.white70, size: 13),
+          ),
+        ),
+      ],
     ),
   );
 
@@ -378,6 +412,76 @@ class _TermButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── QR scanner viewfinder overlay ────────────────────────────────────────
+
+class _QrScanOverlayPainter extends CustomPainter {
+  final Color accentColor;
+  final double scanProgress; // 0.0 → 1.0
+
+  const _QrScanOverlayPainter({
+    required this.accentColor,
+    required this.scanProgress,
+  });
+
+  static const _frameSize   = 260.0;
+  static const _cornerLen   = 26.0;
+  static const _cornerThick = 3.0;
+  static const _dimAlpha    = 0.72;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx    = size.width  / 2;
+    final cy    = size.height / 2;
+    final left  = cx - _frameSize / 2;
+    final top   = cy - _frameSize / 2;
+    final right = cx + _frameSize / 2;
+    final bot   = cy + _frameSize / 2;
+
+    // ── dim surround ──────────────────────────────────────────────────
+    final dimPaint = Paint()..color = Colors.black.withOpacity(_dimAlpha);
+    canvas.drawRect(Rect.fromLTRB(0,     0,          size.width,  top),         dimPaint);
+    canvas.drawRect(Rect.fromLTRB(0,     bot,        size.width,  size.height), dimPaint);
+    canvas.drawRect(Rect.fromLTRB(0,     top,        left,        bot),         dimPaint);
+    canvas.drawRect(Rect.fromLTRB(right, top,        size.width,  bot),         dimPaint);
+
+    // ── corner brackets ───────────────────────────────────────────────
+    final cp = Paint()
+      ..color      = accentColor
+      ..strokeWidth = _cornerThick
+      ..style      = PaintingStyle.stroke
+      ..strokeCap  = StrokeCap.square;
+
+    // top-left
+    canvas.drawLine(Offset(left,              top + _cornerLen), Offset(left,              top),              cp);
+    canvas.drawLine(Offset(left,              top),              Offset(left + _cornerLen, top),              cp);
+    // top-right
+    canvas.drawLine(Offset(right - _cornerLen, top),             Offset(right,             top),              cp);
+    canvas.drawLine(Offset(right,             top),              Offset(right,             top + _cornerLen), cp);
+    // bottom-left
+    canvas.drawLine(Offset(left,              bot - _cornerLen), Offset(left,              bot),              cp);
+    canvas.drawLine(Offset(left,              bot),              Offset(left + _cornerLen, bot),              cp);
+    // bottom-right
+    canvas.drawLine(Offset(right - _cornerLen, bot),             Offset(right,             bot),              cp);
+    canvas.drawLine(Offset(right,             bot - _cornerLen), Offset(right,             bot),              cp);
+
+    // ── animated scan line ────────────────────────────────────────────
+    final lineY = top + scanProgress * _frameSize;
+    final linePaint = Paint()
+      ..shader = LinearGradient(
+          colors: [
+            accentColor.withOpacity(0.0),
+            accentColor.withOpacity(0.85),
+            accentColor.withOpacity(0.0),
+          ],
+        ).createShader(Rect.fromLTWH(left, lineY - 1, _frameSize, 2));
+    canvas.drawRect(Rect.fromLTWH(left, lineY - 1, _frameSize, 2.5), linePaint);
+  }
+
+  @override
+  bool shouldRepaint(_QrScanOverlayPainter old) =>
+      old.scanProgress != scanProgress || old.accentColor != accentColor;
 }
 
 class _SavedRepoTile extends StatelessWidget {
