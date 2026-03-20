@@ -6,8 +6,9 @@ import 'package:xterm/xterm.dart';
 
 import '../models/session.dart';
 import '../services/ws_service.dart';
+import '../theme.dart';
 
-/// Full-screen terminal view for a single PTY session.
+/// Full-screen terminal — pure black, no chrome.
 class TerminalScreen extends StatefulWidget {
   final Session session;
   const TerminalScreen({super.key, required this.session});
@@ -20,12 +21,12 @@ class _TerminalScreenState extends State<TerminalScreen> {
   late final Terminal _terminal;
   late final TerminalController _controller;
   StreamSubscription? _sub;
-  bool _keyboardVisible = false;
+  bool _showBar = true; // auto-hides after first keystroke
 
   @override
   void initState() {
     super.initState();
-    _terminal = Terminal(maxLines: 10000);
+    _terminal = Terminal(maxLines: 20000);
     _controller = TerminalController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _subscribe());
   }
@@ -33,16 +34,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
   void _subscribe() {
     final ws = context.read<WsService>();
 
-    // Forward PTY output to xterm.
     _sub = ws.events.listen((event) {
       if (event is WsPtyOutput) {
         _terminal.write(String.fromCharCodes(event.data));
       }
     });
 
-    // Forward xterm keyboard input → daemon.
     _terminal.onOutput = (data) {
       ws.input(widget.session.id, data);
+      // Hide top bar after first keystroke — more screen estate.
+      if (_showBar) setState(() => _showBar = false);
     };
   }
 
@@ -57,60 +58,79 @@ class _TerminalScreenState extends State<TerminalScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0d0d1a),
-        title: Text(
-          widget.session.cli,
-          style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _keyboardVisible ? Icons.keyboard_hide : Icons.keyboard,
-              color: Colors.white70,
-            ),
-            onPressed: () => setState(() => _keyboardVisible = !_keyboardVisible),
-          ),
-          IconButton(
-            icon: const Icon(Icons.stop_circle_outlined, color: Colors.redAccent),
-            onPressed: () {
-              context.read<WsService>().kill(widget.session.id);
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-      ),
-      body: TerminalView(
-        _terminal,
-        controller: _controller,
-        autofocus: true,
-        // Dark terminal theme.
-        theme: const TerminalTheme(
-          cursor: Color(0xFFE0E0E0),
-          selection: Color(0xFF4040A0),
-          foreground: Color(0xFFE0E0E0),
-          background: Color(0xFF0d0d1a),
-          black: Color(0xFF1a1a2e),
-          white: Color(0xFFE0E0E0),
-          red: Color(0xFFFF5555),
-          green: Color(0xFF50FA7B),
-          yellow: Color(0xFFF1FA8C),
-          blue: Color(0xFF6272A4),
-          magenta: Color(0xFFFF79C6),
-          cyan: Color(0xFF8BE9FD),
-          brightBlack: Color(0xFF6272A4),
-          brightRed: Color(0xFFFF6E6E),
-          brightGreen: Color(0xFF69FF94),
-          brightYellow: Color(0xFFFFFFA5),
-          brightBlue: Color(0xFFD6ACFF),
-          brightMagenta: Color(0xFFFF92DF),
-          brightCyan: Color(0xFFA4FFFF),
-          brightWhite: Color(0xFFFFFFFF),
-          searchHitBackground: Color(0xFF5A4A00),
-          searchHitBackgroundCurrent: Color(0xFF7A6A00),
-          searchHitForeground: Color(0xFFFFFFFF),
+      // Thin status bar — tap to reveal/hide.
+      appBar: _showBar ? _buildAppBar() : null,
+      body: GestureDetector(
+        onTap: () => setState(() => _showBar = !_showBar),
+        child: TerminalView(
+          _terminal,
+          controller: _controller,
+          autofocus: true,
+          padding: const EdgeInsets.all(4),
+          theme: _termTheme,
         ),
       ),
     );
   }
+
+  PreferredSizeWidget _buildAppBar() => PreferredSize(
+    preferredSize: const Size.fromHeight(36),
+    child: Container(
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(children: [
+        // Back
+        GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Text('‹', style: T.monoLg(color: T.textMuted, size: 18)),
+        ),
+        const SizedBox(width: 12),
+
+        // Session label
+        Text(
+          '${widget.session.cli}  ${widget.session.id.substring(0, 8)}',
+          style: T.monoSm(color: T.textMuted),
+        ),
+
+        const Spacer(),
+
+        // Kill
+        GestureDetector(
+          onTap: () {
+            context.read<WsService>().kill(widget.session.id);
+            Navigator.of(context).pop();
+          },
+          child: Text('kill', style: T.monoSm(color: T.errorRed)),
+        ),
+        const SizedBox(height: 36),
+      ]),
+    ),
+  );
 }
+
+/// Pure black terminal theme with green-on-black palette.
+const _termTheme = TerminalTheme(
+  cursor:       Color(0xFF00FF88), // accent green cursor
+  selection:    Color(0xFF003820),
+  foreground:   Color(0xFFCCCCCC),
+  background:   Color(0xFF000000),
+  black:        Color(0xFF000000),
+  white:        Color(0xFFCCCCCC),
+  red:          Color(0xFFFF5555),
+  green:        Color(0xFF00FF88),
+  yellow:       Color(0xFFFFB300),
+  blue:         Color(0xFF6699CC),
+  magenta:      Color(0xFFCC99CC),
+  cyan:         Color(0xFF66CCCC),
+  brightBlack:  Color(0xFF444444),
+  brightRed:    Color(0xFFFF8080),
+  brightGreen:  Color(0xFF80FFB0),
+  brightYellow: Color(0xFFFFD080),
+  brightBlue:   Color(0xFF99BBDD),
+  brightMagenta:Color(0xFFDDBBDD),
+  brightCyan:   Color(0xFF99DDDD),
+  brightWhite:  Color(0xFFEEEEEE),
+  searchHitBackground:        Color(0xFF1A4020),
+  searchHitBackgroundCurrent: Color(0xFF2A6030),
+  searchHitForeground:        Color(0xFF00FF88),
+);

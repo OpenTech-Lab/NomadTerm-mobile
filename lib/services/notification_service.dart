@@ -13,9 +13,13 @@ class NotificationService {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
+    const linuxSettings = LinuxInitializationSettings(
+      defaultActionName: 'Open NomadTerm',
+    );
     const settings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
+      linux: linuxSettings,
     );
     await _plugin.initialize(settings);
   }
@@ -37,9 +41,11 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
     );
+    const linuxDetails = LinuxNotificationDetails();
     const details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
+      linux: linuxDetails,
     );
 
     await _plugin.show(

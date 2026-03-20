@@ -4,14 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/session.dart';
-import '../services/ws_service.dart';
-import '../widgets/approve_dialog.dart';
 import '../services/notification_service.dart';
+import '../services/ws_service.dart';
+import '../theme.dart';
+import '../widgets/approve_dialog.dart';
 import 'terminal_screen.dart';
 
 const _cliTools = ['claude', 'codex', 'copilot', 'gemini'];
 
-/// Lists active PTY sessions and lets the user spawn new ones.
+/// Session list — looks like a process manager / multiplexer status screen.
 class SessionListScreen extends StatefulWidget {
   const SessionListScreen({super.key});
 
@@ -45,56 +46,63 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
   void _handleApprove(String id, String command, String risk) async {
     final ws = context.read<WsService>();
-
-    // If app is in foreground, show dialog inline.
-    if (mounted) {
-      final decision = await showCupertinoApproveDialog(
-        context,
-        command: command,
-        risk: risk,
-      );
-      if (decision != null) {
-        ws.approve(id, decision: decision);
-      }
-    } else {
-      // Background: send notification.
+    if (!mounted) {
       await NotificationService.showApproveNotification(
-        id: id.hashCode,
-        command: command,
-        risk: risk,
+        id: id.hashCode, command: command, risk: risk,
       );
+      return;
     }
+    final decision = await showApproveDialog(context, command: command, risk: risk);
+    if (decision != null) ws.approve(id, decision: decision);
   }
 
   Future<void> _spawnSession() async {
     final ws = context.read<WsService>();
-
-    final cli = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        backgroundColor: const Color(0xFF16213e),
-        title: const Text('Choose AI CLI', style: TextStyle(color: Colors.white)),
-        children: _cliTools
-            .map(
-              (tool) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, tool),
-                child: Text(tool, style: const TextStyle(color: Colors.white70)),
-              ),
-            )
-            .toList(),
-      ),
-    );
-
+    final cli = await _showCliPicker();
     if (cli != null) ws.spawn(cli);
   }
 
-  void _openTerminal(Session session) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TerminalScreen(session: session),
+  Future<String?> _showCliPicker() => showDialog<String>(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: T.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: T.border))),
+            child: Text('select ai cli', style: T.monoSm(color: T.textMuted)),
+          ),
+          // Options
+          ..._cliTools.map((tool) => InkWell(
+            onTap: () => Navigator.pop(ctx, tool),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: T.border)),
+              ),
+              child: Row(children: [
+                Text('> ', style: T.monoMd(color: T.accent)),
+                Text(tool, style: T.monoMd()),
+              ]),
+            ),
+          )),
+          // Cancel
+          InkWell(
+            onTap: () => Navigator.pop(ctx),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Text('  cancel', style: T.monoSm(color: T.textMuted)),
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
   @override
   void dispose() {
@@ -107,45 +115,131 @@ class _SessionListScreenState extends State<SessionListScreen> {
     final ws = context.watch<WsService>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a2e),
+      backgroundColor: T.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF16213e),
-        title: const Text('NomadTerm', style: TextStyle(color: Colors.white)),
+        automaticallyImplyLeading: false,
+        title: Row(children: [
+          Text('nomadterm', style: T.monoMd(color: T.accent)),
+          const SizedBox(width: 12),
+          Text(
+            '${_sessions.length} session${_sessions.length == 1 ? '' : 's'}',
+            style: T.monoSm(),
+          ),
+        ]),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Icon(
-              ws.isConnected ? Icons.wifi : Icons.wifi_off,
-              color: ws.isConnected ? Colors.greenAccent : Colors.redAccent,
+            padding: const EdgeInsets.only(right: 16),
+            child: StatusDot(
+              active: ws.isConnected,
+              label: ws.isConnected ? 'connected' : 'reconnecting',
             ),
           ),
         ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: TDivider(),
+        ),
       ),
       body: _sessions.isEmpty
-          ? const Center(
-              child: Text(
-                'No active sessions.\nTap + to spawn an AI CLI.',
-                style: TextStyle(color: Colors.white54),
-                textAlign: TextAlign.center,
-              ),
-            )
-          : ListView.builder(
-              itemCount: _sessions.length,
-              itemBuilder: (_, i) {
-                final s = _sessions[i];
-                return ListTile(
-                  leading: const Icon(Icons.terminal, color: Color(0xFF6C63FF)),
-                  title: Text(s.cli, style: const TextStyle(color: Colors.white)),
-                  subtitle: Text(s.status, style: const TextStyle(color: Colors.white54)),
-                  trailing: const Icon(Icons.chevron_right, color: Colors.white24),
-                  onTap: () => _openTerminal(s),
-                );
-              },
-            ),
+          ? _buildEmpty()
+          : _buildList(ws),
       floatingActionButton: FloatingActionButton(
         onPressed: _spawnSession,
-        backgroundColor: const Color(0xFF6C63FF),
-        child: const Icon(Icons.add),
+        tooltip: 'new session',
+        child: const Icon(Icons.add, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildEmpty() => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('no active sessions', style: T.monoMd(color: T.textMuted)),
+        const SizedBox(height: 8),
+        Text('tap + to spawn an ai cli', style: T.monoSm()),
+      ],
+    ),
+  );
+
+  Widget _buildList(WsService ws) => ListView.separated(
+    itemCount: _sessions.length,
+    separatorBuilder: (ctx, i) => const TDivider(),
+    itemBuilder: (_, i) {
+      final s = _sessions[i];
+      return _SessionTile(
+        session: s,
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => TerminalScreen(session: s),
+        )),
+        onKill: () => ws.kill(s.id),
+      );
+    },
+  );
+}
+
+// ── Session tile ─────────────────────────────────────────────────────────
+
+class _SessionTile extends StatelessWidget {
+  final Session session;
+  final VoidCallback onTap;
+  final VoidCallback onKill;
+
+  const _SessionTile({
+    required this.session,
+    required this.onTap,
+    required this.onKill,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final running = session.isRunning;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(children: [
+          // Status indicator
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: running ? T.accent : T.textMuted,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // CLI name + status
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(session.cli, style: T.monoMd()),
+                const SizedBox(height: 2),
+                Text(session.status, style: T.monoSm()),
+              ],
+            ),
+          ),
+
+          // Session ID (short)
+          Text(
+            session.id.substring(0, 8),
+            style: T.monoSm(color: T.textDim),
+          ),
+          const SizedBox(width: 16),
+
+          // Kill button
+          GestureDetector(
+            onTap: onKill,
+            child: Text('✕', style: T.monoSm(color: T.textMuted, size: 13)),
+          ),
+          const SizedBox(width: 8),
+
+          // Arrow
+          Text('›', style: T.monoMd(color: T.textMuted)),
+        ]),
       ),
     );
   }

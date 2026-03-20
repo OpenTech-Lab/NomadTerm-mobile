@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
@@ -6,9 +5,10 @@ import 'package:provider/provider.dart';
 import '../models/connection_config.dart';
 import '../services/auth_service.dart';
 import '../services/ws_service.dart';
+import '../theme.dart';
 import 'session_list_screen.dart';
 
-/// First-run setup screen: enter Tailscale IP + port + token, or scan QR.
+/// Connection setup screen — terminal login aesthetic.
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
 
@@ -17,11 +17,12 @@ class ConnectScreen extends StatefulWidget {
 }
 
 class _ConnectScreenState extends State<ConnectScreen> {
-  final _hostCtrl = TextEditingController(text: '100.x.x.x');
-  final _portCtrl = TextEditingController(text: '7681');
+  final _hostCtrl  = TextEditingController(text: '100.x.x.x');
+  final _portCtrl  = TextEditingController(text: '7681');
   final _tokenCtrl = TextEditingController();
-  bool _scanning = false;
-  bool _connecting = false;
+
+  bool _scanning    = false;
+  bool _connecting  = false;
   String? _error;
 
   final _auth = AuthService();
@@ -35,150 +36,222 @@ class _ConnectScreenState extends State<ConnectScreen> {
   }
 
   Future<void> _connect() async {
-    setState(() {
-      _connecting = true;
-      _error = null;
-    });
+    final host  = _hostCtrl.text.trim();
+    final token = _tokenCtrl.text.trim();
+
+    if (host.isEmpty || token.isEmpty) {
+      setState(() => _error = 'host and token are required');
+      return;
+    }
+
+    setState(() { _connecting = true; _error = null; });
 
     final config = ConnectionConfig(
-      host: _hostCtrl.text.trim(),
+      host: host,
       port: int.tryParse(_portCtrl.text.trim()) ?? 7681,
-      token: _tokenCtrl.text.trim(),
+      token: token,
     );
-
     await _auth.saveConfig(config);
 
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider(
-          create: (_) => WsService(config)..connect(),
-          child: const SessionListScreen(),
-        ),
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => ChangeNotifierProvider(
+        create: (_) => WsService(config)..connect(),
+        child: const SessionListScreen(),
       ),
-    );
+    ));
   }
 
   void _onQrDetected(String raw) {
-    // Expected format: ws://host:port/ws?token=<token>
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
-
-    _hostCtrl.text = uri.host;
-    _portCtrl.text = uri.port.toString();
-    final token = uri.queryParameters['token'] ?? '';
-    _tokenCtrl.text = token;
-
+    _hostCtrl.text  = uri.host;
+    _portCtrl.text  = uri.port.toString();
+    _tokenCtrl.text = uri.queryParameters['token'] ?? '';
     setState(() => _scanning = false);
   }
 
+  // ── QR scanner overlay ───────────────────────────────────────────────
+  Widget _buildScanner() => Scaffold(
+    backgroundColor: T.bg,
+    appBar: AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close, size: 18),
+        onPressed: () => setState(() => _scanning = false),
+      ),
+      title: Text('scan qr', style: T.monoMd()),
+      bottom: const PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: TDivider(),
+      ),
+    ),
+    body: MobileScanner(
+      onDetect: (capture) {
+        final barcode = capture.barcodes.firstOrNull;
+        if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
+      },
+    ),
+  );
+
+  // ── Main form ────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (_scanning) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () => setState(() => _scanning = false),
-          ),
-          title: const Text('Scan QR Code', style: TextStyle(color: Colors.white)),
-        ),
-        body: MobileScanner(
-          onDetect: (capture) {
-            final barcode = capture.barcodes.firstOrNull;
-            if (barcode?.rawValue != null) {
-              _onQrDetected(barcode!.rawValue!);
-            }
-          },
-        ),
-      );
-    }
+    if (_scanning) return _buildScanner();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a2e),
+      backgroundColor: T.bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 40),
-              const Text(
-                'NomadTerm',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Remote AI Terminal',
-                style: TextStyle(color: Colors.white54, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              _field(_hostCtrl, 'Tailscale IP', hint: '100.x.x.x'),
-              const SizedBox(height: 12),
-              _field(_portCtrl, 'Port', hint: '7681', keyboardType: TextInputType.number),
-              const SizedBox(height: 12),
-              _field(_tokenCtrl, 'Token', hint: 'Bearer token from daemon'),
-              const SizedBox(height: 8),
-              if (_error != null)
-                Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: () => setState(() => _scanning = true),
-                icon: const Icon(Icons.qr_code_scanner, color: Colors.white70),
-                label: const Text('Scan QR Code', style: TextStyle(color: Colors.white70)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white24),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _connecting ? null : _connect,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C63FF),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _connecting
-                    ? const CupertinoActivityIndicator()
-                    : const Text('Connect', style: TextStyle(fontSize: 16)),
-              ),
               const SizedBox(height: 24),
+
+              // ── Logo / header ──────────────────────────────────────
+              Text('nomadterm', style: T.monoLg(color: T.accent, size: 22, weight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('remote ai terminal  v0.1.0', style: T.monoSm()),
+              const SizedBox(height: 32),
+
+              // ── Section label ──────────────────────────────────────
+              Text('// connect to daemon', style: T.monoSm(color: T.textDim, size: 11)),
+              const SizedBox(height: 16),
+
+              // ── Fields ─────────────────────────────────────────────
+              _TermField(label: 'host', controller: _hostCtrl, hint: '100.x.x.x'),
+              const SizedBox(height: 10),
+              _TermField(label: 'port', controller: _portCtrl, hint: '7681',
+                  keyboardType: TextInputType.number),
+              const SizedBox(height: 10),
+              _TermField(label: 'token', controller: _tokenCtrl, hint: 'bearer token',
+                  obscure: false),
+
+              // ── Error ──────────────────────────────────────────────
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Row(children: [
+                  const Icon(Icons.error_outline, size: 12, color: T.errorRed),
+                  const SizedBox(width: 6),
+                  Text(_error!, style: T.monoSm(color: T.errorRed)),
+                ]),
+              ],
+
+              const SizedBox(height: 32),
+
+              // ── Actions ────────────────────────────────────────────
+              _TermButton(
+                label: '\$ connect',
+                onTap: _connecting ? null : _connect,
+                primary: true,
+                loading: _connecting,
+              ),
+              const SizedBox(height: 10),
+              _TermButton(
+                label: '\$ scan-qr',
+                onTap: () => setState(() => _scanning = true),
+              ),
+
+              const SizedBox(height: 40),
+              Text(
+                'start daemon: nomadterm --ws --bind-tailscale',
+                style: T.monoSm(size: 10),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _field(
-    TextEditingController ctrl,
-    String label, {
-    String? hint,
-    TextInputType keyboardType = TextInputType.text,
-  }) =>
+// ── Private widgets ──────────────────────────────────────────────────────
+
+class _TermField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final TextInputType keyboardType;
+  final bool obscure;
+
+  const _TermField({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    this.keyboardType = TextInputType.text,
+    this.obscure = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(label, style: T.monoSm(color: T.textMuted, size: 11)),
+      ),
       TextField(
-        controller: ctrl,
+        controller: controller,
         keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white),
+        obscureText: obscure,
+        style: T.monoMd(),
+        cursorColor: T.accent,
         decoration: InputDecoration(
-          labelText: label,
           hintText: hint,
-          labelStyle: const TextStyle(color: Colors.white54),
-          hintStyle: const TextStyle(color: Colors.white24),
-          enabledBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.white24),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF6C63FF)),
-          ),
+          prefixText: '> ',
+          prefixStyle: T.monoMd(color: T.accent),
         ),
-      );
+      ),
+    ],
+  );
+}
+
+class _TermButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+  final bool loading;
+
+  const _TermButton({
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+    this.loading = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !loading;
+    final fg = primary ? T.bg : T.accent;
+    final bg = primary ? T.accent : Colors.transparent;
+    final border = primary ? T.accent : T.border;
+
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedOpacity(
+        opacity: enabled ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          width: double.infinity,
+          height: 44,
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border.all(color: border),
+          ),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: loading
+              ? SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: fg,
+                  ),
+                )
+              : Text(label, style: T.monoMd(color: fg)),
+        ),
+      ),
+    );
+  }
 }
