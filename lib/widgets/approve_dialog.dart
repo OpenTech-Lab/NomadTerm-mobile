@@ -46,7 +46,7 @@ Future<bool?> showCupertinoApproveDialog(
       ),
     );
 
-CupertinoColor _riskColor(String risk) => switch (risk.toLowerCase()) {
+Color _riskColor(String risk) => switch (risk.toLowerCase()) {
       'high' => CupertinoColors.systemRed,
       'medium' => CupertinoColors.systemOrange,
       _ => CupertinoColors.systemGreen,

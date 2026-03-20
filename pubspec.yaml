@@ -36,7 +36,7 @@ dependencies:
   web_socket_channel: ^3.0.0
 
   # Terminal emulator widget
-  xterm: ^3.8.0
+  xterm: ^4.0.0
 
   # QR code scanner (scan to connect)
   mobile_scanner: ^5.0.0
