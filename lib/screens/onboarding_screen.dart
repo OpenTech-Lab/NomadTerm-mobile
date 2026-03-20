@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../models/connection_config.dart';
@@ -25,16 +26,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool _scanning    = false;
   bool _connecting  = false;
+  bool _detected    = false; // guard against duplicate detections
   String? _error;
+  String _version   = '';
 
   final _auth = AuthService();
   final _repoAuth = RepoAuthService();
   List<ConnectionConfig> _savedRepos = [];
 
+  late final MobileScannerController _scannerController;
+
   @override
   void initState() {
     super.initState();
+    _scannerController = MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+    );
     _loadSavedRepos();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
   }
 
   Future<void> _loadSavedRepos() async {
@@ -47,10 +58,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
+    _scannerController.dispose();
     _hostCtrl.dispose();
     _portCtrl.dispose();
     _tokenCtrl.dispose();
     super.dispose();
+  }
+
+  void _startScanning() {
+    _detected = false;
+    _scannerController.start();
+    setState(() => _scanning = true);
+  }
+
+  void _stopScanning() {
+    _scannerController.stop();
+    setState(() => _scanning = false);
   }
 
   Future<void> _connect() async {
@@ -82,8 +105,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _onQrDetected(String raw) {
+    if (_detected) return; // ignore duplicate fires
+    _detected = true;
+    _scannerController.stop();
+
     final uri = Uri.tryParse(raw);
-    if (uri == null) return;
+    if (uri == null) { _detected = false; return; }
 
     if (uri.scheme == 'nomadterm') {
       // Parse nomadterm:// QR (from GUI)
@@ -118,7 +145,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ));
     } else {
-      // Legacy ws:// QR
+      // Legacy ws:// QR — fill the form fields
       _hostCtrl.text  = uri.host;
       _portCtrl.text  = uri.port.toString();
       _tokenCtrl.text = uri.queryParameters['token'] ?? '';
@@ -132,15 +159,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     appBar: AppBar(
       leading: IconButton(
         icon: const Icon(Icons.close, size: 18),
-        onPressed: () => setState(() => _scanning = false),
+        onPressed: _stopScanning,
       ),
       title: Text('scan qr', style: th.monoMd()),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.flashlight_on, size: 20),
+          onPressed: () => _scannerController.toggleTorch(),
+          tooltip: 'toggle torch',
+        ),
+      ],
       bottom: const PreferredSize(
         preferredSize: Size.fromHeight(1),
         child: TDivider(),
       ),
     ),
     body: MobileScanner(
+      controller: _scannerController,
       onDetect: (capture) {
         final barcode = capture.barcodes.firstOrNull;
         if (barcode?.rawValue != null) _onQrDetected(barcode!.rawValue!);
@@ -171,7 +206,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Text('nomadterm',
                   style: th.monoLg(color: th.accent, size: fsz + 8, weight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text('remote ai terminal  v0.1.0', style: th.monoSm(size: fsz - 2)),
+              Text('remote ai terminal  ${_version.isNotEmpty ? 'v$_version' : ''}',
+                  style: th.monoSm(size: fsz - 2)),
               const SizedBox(height: 32),
 
               // ── Saved repos ────────────────────────────────────────────
@@ -231,7 +267,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 10),
               _TermButton(
                 label: '\$ scan-qr',
-                onTap: () => setState(() => _scanning = true),
+                onTap: _startScanning,
                 fontSize: fsz,
               ),
 

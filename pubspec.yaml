@@ -50,6 +50,9 @@ dependencies:
   # State management
   provider: ^6.1.0
 
+  # App version from pubspec.yaml at runtime
+  package_info_plus: ^8.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
