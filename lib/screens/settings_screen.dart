@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
 import '../theme.dart';
+import 'onboarding_screen.dart';
 
 /// Settings screen — terminal-styled sliders for font sizes + theme picker.
 class SettingsScreen extends StatelessWidget {
@@ -84,6 +85,17 @@ class SettingsScreen extends StatelessWidget {
               await sp.setUiFontSize(14.0);
               await sp.setTermFontSize(15.0);
             },
+          ),
+
+          const TDivider(),
+          _Section(label: '// connection'),
+
+          _ActionRow(
+            label: 'disconnect  (back to onboarding)',
+            onTap: () => Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+              (_) => false,
+            ),
           ),
 
           const TDivider(),
