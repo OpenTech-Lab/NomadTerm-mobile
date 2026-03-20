@@ -1,0 +1,84 @@
+require 'base64'
+require 'tmpdir'
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Build Flutter iOS app and upload to TestFlight"
+  lane :release do
+    # --- Apple API key (App Store Connect) ---
+    api_key_path = File.join(Dir.tmpdir, "apple_api_key_#{ENV['APPLE_API_KEY_ID']}.p8")
+    File.write(api_key_path, Base64.decode64(ENV.fetch("APPLE_API_PRIVATE_KEY_BASE64")))
+
+    api_key = app_store_connect_api_key(
+      key_id:     ENV.fetch("APPLE_API_KEY_ID"),
+      issuer_id:  ENV.fetch("APPLE_API_ISSUER_ID"),
+      key_filepath: api_key_path,
+      duration:   1200,
+      in_house:   false,
+    )
+
+    # --- Build number ---
+    increment_build_number(
+      build_number: ENV.fetch("IOS_BUILD_NUMBER"),
+      xcodeproj:    "Runner.xcodeproj",
+    )
+
+    # --- Prepare Flutter iOS build config without signing ---
+    # `xcode_backend.sh build` can fail in archive when iOS config artifacts are
+    # not prepared up front on CI. Generate config only, no archive/signing here.
+    Dir.chdir("..") do
+      sh("flutter pub get")
+      sh("flutter precache --ios")
+      sh("flutter build ios --release --no-codesign --config-only")
+    end
+
+    # --- Archive & export (manual signing; profile already installed by CI) ---
+    # xcargs must be a Hash so fastlane shell-quotes each value individually.
+    # Passing a joined String breaks when the profile name contains spaces.
+    app_identifier = CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)
+    if app_identifier.to_s.empty?
+      UI.user_error!("app_identifier is missing. Set it in ios/fastlane/Appfile")
+    end
+    profile_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+
+    begin
+      gym(
+        workspace:     "Runner.xcworkspace",
+        scheme:        "Runner",
+        configuration: "Release",
+        clean:         false,
+        export_method: "app-store",
+        codesigning_identity: "Apple Distribution",
+        suppress_xcode_output: false,
+        xcargs: {
+          "DEVELOPMENT_TEAM"               => ENV.fetch("IOS_TEAM_ID"),
+          "CODE_SIGN_STYLE"                => "Manual",
+          "PROVISIONING_PROFILE_SPECIFIER" => profile_name,
+        },
+        export_options: {
+          method:               "app-store",
+          teamID:               ENV.fetch("IOS_TEAM_ID"),
+          signingStyle:         "manual",
+          provisioningProfiles: {
+            app_identifier => profile_name,
+          },
+          uploadSymbols:        true,
+        },
+      )
+    rescue => e
+      gym_log = File.expand_path("~/Library/Logs/gym/Runner-Runner.log")
+      if File.exist?(gym_log)
+        UI.important("Printing tail of #{gym_log} for root-cause diagnostics")
+        UI.message(File.readlines(gym_log).last(300).join)
+      end
+      raise e
+    end
+
+    # --- Upload to TestFlight ---
+    upload_to_testflight(
+      api_key:                          api_key,
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end
