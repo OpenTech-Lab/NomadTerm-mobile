@@ -7,6 +7,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/session_list_screen.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
+import 'services/repo_auth_service.dart';
 import 'services/ws_service.dart';
 
 Future<void> main() async {
@@ -16,7 +17,19 @@ Future<void> main() async {
   final settings = SettingsProvider();
   await settings.load();
 
-  final savedConfig = await AuthService().loadConfig();
+  // Try multi-repo storage first; fall back to legacy single-repo storage.
+  ConnectionConfig? savedConfig;
+  final now = DateTime.now();
+  final repos = await RepoAuthService().loadAllRepos();
+  final validRepos = repos
+      .where((r) => r.expiresAt == null || r.expiresAt!.isAfter(now))
+      .toList();
+  if (validRepos.isNotEmpty) {
+    savedConfig = validRepos.last;
+  } else {
+    savedConfig = await AuthService().loadConfig();
+  }
+
   runApp(NomadTermApp(savedConfig: savedConfig, settings: settings));
 }
 

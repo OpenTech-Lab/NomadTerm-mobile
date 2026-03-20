@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/connection_config.dart';
 import '../providers/settings_provider.dart';
 import '../services/auth_service.dart';
+import '../services/repo_auth_service.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
 import 'session_list_screen.dart';
@@ -27,6 +28,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _error;
 
   final _auth = AuthService();
+  final _repoAuth = RepoAuthService();
+  List<ConnectionConfig> _savedRepos = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedRepos();
+  }
+
+  Future<void> _loadSavedRepos() async {
+    final repos = await _repoAuth.loadAllRepos();
+    final now = DateTime.now();
+    // Keep non-expired repos (or those with no expiry set)
+    final valid = repos.where((r) => r.expiresAt == null || r.expiresAt!.isAfter(now)).toList();
+    setState(() => _savedRepos = valid);
+  }
 
   @override
   void dispose() {
@@ -53,6 +70,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       token: token,
     );
     await _auth.saveConfig(config);
+    await _repoAuth.saveRepo(config);
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -66,10 +84,46 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _onQrDetected(String raw) {
     final uri = Uri.tryParse(raw);
     if (uri == null) return;
-    _hostCtrl.text  = uri.host;
-    _portCtrl.text  = uri.port.toString();
-    _tokenCtrl.text = uri.queryParameters['token'] ?? '';
-    setState(() => _scanning = false);
+
+    if (uri.scheme == 'nomadterm') {
+      // Parse nomadterm:// QR (from GUI)
+      final host = uri.host;
+      final port = uri.port > 0 ? uri.port : 7681;
+      final token = uri.queryParameters['token'] ?? '';
+      final repoId = uri.queryParameters['repo_id'] ?? '';
+      final repoPath = uri.queryParameters['repo_path'] ?? '';
+      final repoName = uri.queryParameters['repo_name'] ?? '';
+      final expiresStr = uri.queryParameters['expires_at'];
+      final expiresAt = expiresStr != null ? DateTime.tryParse(expiresStr) : null;
+      final tls = uri.queryParameters['tls'] == '1';
+
+      final config = ConnectionConfig(
+        host: host,
+        port: port,
+        token: token,
+        useTls: tls,
+        repoId: repoId,
+        repoPath: Uri.decodeComponent(repoPath),
+        repoName: Uri.decodeComponent(repoName),
+        expiresAt: expiresAt ?? DateTime.now().add(const Duration(days: 30)),
+      );
+
+      _repoAuth.saveRepo(config);
+      setState(() => _scanning = false);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider(
+          create: (_) => WsService(config)..connect(),
+          child: const SessionListScreen(),
+        ),
+      ));
+    } else {
+      // Legacy ws:// QR
+      _hostCtrl.text  = uri.host;
+      _portCtrl.text  = uri.port.toString();
+      _tokenCtrl.text = uri.queryParameters['token'] ?? '';
+      setState(() => _scanning = false);
+    }
   }
 
   // ── QR scanner overlay ───────────────────────────────────────────────
@@ -119,6 +173,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 4),
               Text('remote ai terminal  v0.1.0', style: th.monoSm(size: fsz - 2)),
               const SizedBox(height: 32),
+
+              // ── Saved repos ────────────────────────────────────────────
+              if (_savedRepos.isNotEmpty) ...[
+                Text('// saved repos',
+                    style: th.monoSm(color: th.textDim, size: fsz - 3)),
+                const SizedBox(height: 8),
+                ..._savedRepos.map((repo) => _SavedRepoTile(
+                  repo: repo,
+                  fontSize: fsz,
+                  onTap: () {
+                    Navigator.of(context).pushReplacement(MaterialPageRoute(
+                      builder: (_) => ChangeNotifierProvider(
+                        create: (_) => WsService(repo)..connect(),
+                        child: const SessionListScreen(),
+                      ),
+                    ));
+                  },
+                )),
+                const SizedBox(height: 24),
+              ],
 
               // ── Section label ──────────────────────────────────────
               Text('// connect to daemon',
@@ -264,6 +338,51 @@ class _TermButton extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 1.5, color: fg),
                 )
               : Text(label, style: th.monoMd(color: fg, size: fontSize)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedRepoTile extends StatelessWidget {
+  final ConnectionConfig repo;
+  final VoidCallback onTap;
+  final double fontSize;
+
+  const _SavedRepoTile({
+    required this.repo,
+    required this.onTap,
+    required this.fontSize,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final th = context.watch<SettingsProvider>().nomadTheme;
+    final name = repo.repoName.isNotEmpty ? repo.repoName : repo.host;
+    final expires = repo.expiresAt != null
+        ? 'exp ${repo.expiresAt!.toLocal().toString().substring(0, 10)}'
+        : '';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(border: Border.all(color: th.border)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: th.monoMd(size: fontSize)),
+                  Text('${repo.host}:${repo.port}  $expires',
+                      style: th.monoSm(color: th.textMuted, size: fontSize - 3)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 12, color: th.accent),
+          ],
         ),
       ),
     );
