@@ -56,7 +56,7 @@ semver_gt() {
 
 # Determine latest known version from current pubspec and existing release tags.
 LATEST_VERSION="${CURRENT_VERSION_NAME}"
-LATEST_TAG_VERSION="$(git -C "${PROJECT_ROOT}" tag --list 'mobile/v[0-9]*.[0-9]*.[0-9]*' | sed 's|^mobile/v||' | sort -V | tail -n1)"
+LATEST_TAG_VERSION="$(git -C "${PROJECT_ROOT}" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -n1)"
 if [ -n "${LATEST_TAG_VERSION}" ] && semver_gt "${LATEST_TAG_VERSION}" "${LATEST_VERSION}"; then
   LATEST_VERSION="${LATEST_TAG_VERSION}"
 fi
@@ -92,7 +92,7 @@ else
 fi
 
 VERSION_FULL="${VERSION_NAME}+${BUILD_NUMBER}"
-TAG_NAME="mobile/v${VERSION_NAME}"
+TAG_NAME="v${VERSION_NAME}"
 
 echo "Updating app version to ${VERSION_FULL}..."
 
@@ -124,7 +124,7 @@ echo "✓ $(grep '^version:' "${PUBSPEC}")"
 mkdir -p "${VERSION_DIR}"
 VERSION_FILE="${VERSION_DIR}/${VERSION_NAME}.md"
 
-LAST_TAG="$(git -C "${PROJECT_ROOT}" tag --list 'mobile/v*' --sort=-version:refname | head -n1)"
+LAST_TAG="$(git -C "${PROJECT_ROOT}" describe --tags --abbrev=0 2>/dev/null || true)"
 if [ -n "${LAST_TAG}" ]; then
   CHANGELOG_ENTRIES="$(git -C "${PROJECT_ROOT}" log "${LAST_TAG}"..HEAD --pretty=format:'    %h %s' || true)"
 else
