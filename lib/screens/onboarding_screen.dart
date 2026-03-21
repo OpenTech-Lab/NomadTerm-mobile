@@ -22,6 +22,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     with SingleTickerProviderStateMixin {
   bool _scanning = false;
   bool _detected = false; // guard against duplicate detections
+  bool _connecting = false;
+  String? _connectError;
   String _version = '';
 
   final _repoAuth = RepoAuthService();
@@ -75,16 +77,48 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     setState(() => _scanning = false);
   }
 
-  void _connectWith(ConnectionConfig config) {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider(
-          create: (_) => WsService(config)..connect(),
-          child: const SessionListScreen(),
-        ),
-      ),
-    );
+  Future<void> _connectWith(ConnectionConfig config) async {
+    if (!mounted || _connecting) return;
+    setState(() {
+      _connecting = true;
+      _connectError = null;
+    });
+
+    final ws = WsService(config);
+    try {
+      await ws.connect();
+      // Give a brief moment for the ready/error to propagate.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      if (!mounted) {
+        ws.dispose();
+        return;
+      }
+
+      if (ws.isConnected) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ChangeNotifierProvider.value(
+              value: ws,
+              child: const SessionListScreen(),
+            ),
+          ),
+        );
+      } else {
+        ws.dispose();
+        setState(() {
+          _connecting = false;
+          _connectError = 'cannot reach server at ${config.host}:${config.port}';
+        });
+      }
+    } catch (e) {
+      ws.dispose();
+      if (!mounted) return;
+      setState(() {
+        _connecting = false;
+        _connectError = 'cannot reach server at ${config.host}:${config.port}';
+      });
+    }
   }
 
   Future<void> _renameRepo(ConnectionConfig repo, String newName) async {
@@ -279,6 +313,37 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
               const SizedBox(height: 28),
 
+              // ── Connection status ──────────────────────────────────
+              if (_connecting)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(children: [
+                    SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5, color: th.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('connecting…', style: th.monoSm(color: th.textMuted, size: fsz - 2)),
+                  ]),
+                ),
+              if (_connectError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: th.errorRed),
+                    ),
+                    child: Text(
+                      _connectError!,
+                      style: th.monoSm(color: th.errorRed, size: fsz - 2),
+                    ),
+                  ),
+                ),
+
               // ── Add new connection ────────────────────────────────
               Text(
                 '// add connection',
@@ -287,7 +352,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               const SizedBox(height: 10),
               _TermButton(
                 label: '\$ scan-qr',
-                onTap: _startScanning,
+                onTap: _connecting ? null : _startScanning,
                 fontSize: fsz,
               ),
 
