@@ -9,6 +9,7 @@ import '../services/notification_service.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
 import '../widgets/approve_dialog.dart';
+import 'onboarding_screen.dart';
 import 'settings_screen.dart';
 import 'terminal_screen.dart';
 
@@ -134,6 +135,16 @@ class _SessionListScreenState extends State<SessionListScreen> {
       backgroundColor: th.bg,
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: !ws.isConnected && ws.lastError != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, size: 18),
+                tooltip: 'Back to QR scan',
+                onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+                  (_) => false,
+                ),
+              )
+            : null,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -163,7 +174,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
               label: ws.isConnected
                   ? th.labelConnected
                   : ws.lastError != null
-                      ? ws.lastError!
+                      ? 'connection failed'
                       : th.labelReconnecting,
             ),
           ),
