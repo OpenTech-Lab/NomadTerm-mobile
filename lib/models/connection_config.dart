@@ -43,7 +43,7 @@ class ConnectionConfig {
     scheme: useTls ? 'wss' : 'ws',
     host: host,
     port: port,
-    path: '/ws',
+    path: repoId.isNotEmpty ? '/$repoId/ws' : '/ws',
     queryParameters: token.isNotEmpty ? {'token': token} : null,
   ).toString();
 
@@ -56,7 +56,7 @@ class ConnectionConfig {
       scheme: pubTls ? 'wss' : 'ws',
       host: pubHost,
       port: pubPort,
-      path: '/ws',
+      path: repoId.isNotEmpty ? '/$repoId/ws' : '/ws',
       queryParameters: token.isNotEmpty ? {'token': token} : null,
     ).toString();
   }
