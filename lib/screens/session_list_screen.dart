@@ -45,6 +45,24 @@ class _SessionListScreenState extends State<SessionListScreen> {
           });
         case WsApproveRequest(:final id, :final command, :final risk):
           _handleApprove(id, command, risk);
+        case WsError(:final message):
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: Colors.red.shade800,
+              ),
+            );
+          }
+        case WsSessionStarted(:final cli):
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Starting $cli…'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         default:
           break;
       }

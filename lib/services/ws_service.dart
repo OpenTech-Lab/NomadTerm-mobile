@@ -42,6 +42,12 @@ class WsError extends WsEvent {
   WsError(this.message);
 }
 
+class WsSessionStarted extends WsEvent {
+  final String sessionId;
+  final String cli;
+  WsSessionStarted({required this.sessionId, required this.cli});
+}
+
 class WsUsageUpdate extends WsEvent {
   final UsageData data;
   WsUsageUpdate(this.data);
@@ -193,6 +199,11 @@ class WsService extends ChangeNotifier {
               id: json['id'] as String,
               command: json['command'] as String,
               risk: json['risk'] as String? ?? 'unknown',
+            ));
+          case 'session_started':
+            _eventController.add(WsSessionStarted(
+              sessionId: json['session_id'] as String,
+              cli: json['cli'] as String? ?? '',
             ));
           case 'error':
             _eventController.add(WsError(json['message'] as String? ?? 'unknown error'));
