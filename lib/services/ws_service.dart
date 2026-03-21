@@ -9,6 +9,8 @@ import '../models/session.dart';
 import '../models/usage.dart';
 import 'tls_pinning.dart';
 
+const _kConnectTimeout = Duration(seconds: 8);
+
 /// Events emitted by [WsService].
 sealed class WsEvent {}
 
@@ -95,9 +97,10 @@ class WsService extends ChangeNotifier {
                 return TlsPinningService.computeFingerprint(cert.der) ==
                     expectedFp;
               };
-        socket = await io.WebSocket.connect(uri, customClient: httpClient);
+        socket = await io.WebSocket.connect(uri, customClient: httpClient)
+            .timeout(_kConnectTimeout);
       } else {
-        socket = await io.WebSocket.connect(uri);
+        socket = await io.WebSocket.connect(uri).timeout(_kConnectTimeout);
       }
     } catch (e) {
       final msg = e.toString();
@@ -106,11 +109,14 @@ class WsService extends ChangeNotifier {
           msg.toLowerCase().contains('forbidden');
       final isMismatch = msg.toLowerCase().contains('handshake') ||
           msg.toLowerCase().contains('certificate');
+      final isTimeout = e is TimeoutException;
       _lastError = isAuth
           ? 'auth failed — wrong token (401)'
           : isMismatch
               ? 'cert fingerprint mismatch — re-scan the qr code'
-              : 'cannot reach daemon';
+              : isTimeout
+                  ? 'connection timed out — check firewall or IP'
+                  : 'cannot reach daemon';
       _eventController.add(WsError(_lastError!));
       notifyListeners();
       if (!isAuth && !isMismatch) _scheduleReconnect();

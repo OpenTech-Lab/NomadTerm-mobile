@@ -27,6 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _detected = false; // guard against duplicate detections
   bool _connecting = false;
   String? _connectError;
+  ConnectionConfig? _lastFailedConfig;
   String _version = '';
 
   final _repoAuth = RepoAuthService();
@@ -85,6 +86,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     setState(() {
       _connecting = true;
       _connectError = null;
+      _lastFailedConfig = null;
     });
 
     // For wss:// with no fingerprint in QR, probe the cert and ask the user
@@ -108,8 +110,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final ws = WsService(config);
     try {
       await ws.connect();
-      // Give a brief moment for the connection state to settle.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
 
       if (!mounted) {
         ws.dispose();
@@ -130,6 +130,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         setState(() {
           _connecting = false;
           _connectError = ws.lastError ?? 'cannot reach server at ${config.host}:${config.port}';
+          _lastFailedConfig = config;
         });
       }
     } catch (e) {
@@ -138,6 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       setState(() {
         _connecting = false;
         _connectError = 'cannot reach server at ${config.host}:${config.port}';
+        _lastFailedConfig = config;
       });
     }
   }
@@ -438,9 +440,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     decoration: BoxDecoration(
                       border: Border.all(color: th.errorRed),
                     ),
-                    child: Text(
-                      _connectError!,
-                      style: th.monoSm(color: th.errorRed, size: fsz - 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _connectError!,
+                          style: th.monoSm(color: th.errorRed, size: fsz - 2),
+                        ),
+                        if (_lastFailedConfig != null) ...[
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: () => _connectWith(_lastFailedConfig!),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.refresh, size: 13, color: th.accent),
+                                const SizedBox(width: 4),
+                                Text('retry', style: th.monoSm(color: th.accent, size: fsz - 2)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
