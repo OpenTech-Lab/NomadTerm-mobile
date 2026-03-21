@@ -15,6 +15,9 @@ class ConnectionConfig {
   /// External port from UPnP mapping (from `pub_port=` QR field), if available.
   final int? pubPort;
 
+  /// Whether the public endpoint uses TLS (from `pub_tls=1` QR field).
+  final bool pubTls;
+
   // Repo metadata (populated from nomadterm:// QR codes)
   final String repoId;
   final String repoPath;
@@ -29,6 +32,7 @@ class ConnectionConfig {
     this.certFingerprint,
     this.pubHost,
     this.pubPort,
+    this.pubTls = false,
     this.repoId = '',
     this.repoPath = '',
     this.repoName = '',
@@ -44,11 +48,12 @@ class ConnectionConfig {
   ).toString();
 
   /// Public URL using the UPnP endpoint, if available.
-  /// Uses the same TLS setting as the LAN URL.
+  /// Uses [pubTls] (not [useTls]) — the LAN and public endpoints may have
+  /// different TLS settings.
   String? get publicWsUrl {
     if (pubHost == null || pubPort == null) return null;
     return Uri(
-      scheme: useTls ? 'wss' : 'ws',
+      scheme: pubTls ? 'wss' : 'ws',
       host: pubHost,
       port: pubPort,
       path: '/ws',
@@ -64,6 +69,7 @@ class ConnectionConfig {
     String? certFingerprint,
     String? pubHost,
     int? pubPort,
+    bool? pubTls,
     String? repoId,
     String? repoPath,
     String? repoName,
@@ -76,6 +82,7 @@ class ConnectionConfig {
     certFingerprint: certFingerprint ?? this.certFingerprint,
     pubHost: pubHost ?? this.pubHost,
     pubPort: pubPort ?? this.pubPort,
+    pubTls: pubTls ?? this.pubTls,
     repoId: repoId ?? this.repoId,
     repoPath: repoPath ?? this.repoPath,
     repoName: repoName ?? this.repoName,

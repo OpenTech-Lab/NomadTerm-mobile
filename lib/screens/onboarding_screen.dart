@@ -275,6 +275,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         certFingerprint: uri.queryParameters['fp'],
         pubHost: uri.queryParameters['pub_host'],
         pubPort: pubPortStr != null ? int.tryParse(pubPortStr) : null,
+        pubTls: uri.queryParameters['pub_tls'] == '1',
         repoId: uri.queryParameters['repo_id'] ?? '',
         repoPath: uri.queryParameters['repo_path'] ?? '',
         repoName: uri.queryParameters['repo_name'] ?? '',
