@@ -77,49 +77,37 @@ class WsService extends ChangeNotifier {
   String? get lastError => _lastError;
 
   /// Connect (or reconnect) to the daemon WebSocket.
+  /// Tries the LAN URL first; if that fails and a public endpoint is available,
+  /// falls back to the public URL automatically.
   Future<void> connect() async {
     if (_disposed) return;
     await _disconnect();
 
-    final uri = config.wsUrl;
-    io.WebSocket socket;
+    io.WebSocket? socket;
+    String? lastErr;
 
-    try {
-      if (config.useTls) {
-        final expectedFp = config.certFingerprint;
-        final httpClient = io.HttpClient()
-          ..badCertificateCallback =
-              (io.X509Certificate cert, String host, int port) {
-                if (expectedFp == null) {
-                  // No fingerprint to pin — allow (still encrypted).
-                  return true;
-                }
-                return TlsPinningService.computeFingerprint(cert.der) ==
-                    expectedFp;
-              };
-        socket = await io.WebSocket.connect(uri, customClient: httpClient)
-            .timeout(_kConnectTimeout);
-      } else {
-        socket = await io.WebSocket.connect(uri).timeout(_kConnectTimeout);
+    // Try each candidate URL in order: LAN first, then public fallback.
+    final candidates = [
+      config.wsUrl,
+      if (config.publicWsUrl != null) config.publicWsUrl!,
+    ];
+
+    for (final url in candidates) {
+      try {
+        socket = await _openSocket(url);
+        break; // connected — stop trying
+      } catch (e) {
+        lastErr = _classifyError(e);
       }
-    } catch (e) {
-      final msg = e.toString();
-      final isAuth = msg.contains('401') ||
-          msg.toLowerCase().contains('unauthorized') ||
-          msg.toLowerCase().contains('forbidden');
-      final isMismatch = msg.toLowerCase().contains('handshake') ||
-          msg.toLowerCase().contains('certificate');
-      final isTimeout = e is TimeoutException;
-      _lastError = isAuth
-          ? 'auth failed — wrong token (401)'
-          : isMismatch
-              ? 'cert fingerprint mismatch — re-scan the qr code'
-              : isTimeout
-                  ? 'connection timed out — check firewall or IP'
-                  : 'cannot reach daemon';
+    }
+
+    if (socket == null) {
+      _lastError = lastErr ?? 'cannot reach daemon';
       _eventController.add(WsError(_lastError!));
       notifyListeners();
-      if (!isAuth && !isMismatch) _scheduleReconnect();
+      final isAuthOrMismatch = _lastError!.contains('auth') ||
+          _lastError!.contains('fingerprint');
+      if (!isAuthOrMismatch) _scheduleReconnect();
       return;
     }
 
@@ -134,6 +122,51 @@ class WsService extends ChangeNotifier {
       onError: (_) => _handleDisconnect(),
       onDone: _handleDisconnect,
     );
+  }
+
+  /// Open a WebSocket, applying TLS certificate pinning for wss:// URLs.
+  Future<io.WebSocket> _openSocket(String url) async {
+    final isSecure = url.startsWith('wss://');
+
+    if (isSecure) {
+      final httpClient = io.HttpClient();
+      httpClient.badCertificateCallback =
+          (io.X509Certificate cert, String host, int port) {
+        if (config.certFingerprint == null) return false;
+        final actual = TlsPinningService.computeFingerprint(
+            Uint8List.fromList(cert.der));
+        return actual == config.certFingerprint;
+      };
+      return io.WebSocket.connect(url, customClient: httpClient)
+          .timeout(_kConnectTimeout);
+    }
+
+    return io.WebSocket.connect(url).timeout(_kConnectTimeout);
+  }
+
+  /// Map an exception to a short, user-readable error string.
+  String _classifyError(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('401') ||
+        msg.contains('403') ||
+        msg.contains('unauthorized')) {
+      return 'auth error — check token';
+    }
+    if (msg.contains('handshake') ||
+        msg.contains('certificate') ||
+        msg.contains('bad cert')) {
+      return 'fingerprint mismatch — untrusted certificate';
+    }
+    if (msg.contains('timeout') || msg.contains('timed out')) {
+      return 'connection timed out';
+    }
+    if (msg.contains('refused') || msg.contains('econnrefused')) {
+      return 'connection refused';
+    }
+    if (msg.contains('no address') || msg.contains('failed host lookup')) {
+      return 'host not found';
+    }
+    return 'cannot reach daemon';
   }
 
   void _onMessage(dynamic raw) {

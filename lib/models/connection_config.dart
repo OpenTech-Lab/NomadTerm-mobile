@@ -43,11 +43,12 @@ class ConnectionConfig {
     queryParameters: token.isNotEmpty ? {'token': token} : null,
   ).toString();
 
-  /// wss:// URL using the UPnP public endpoint, if available.
+  /// Public URL using the UPnP endpoint, if available.
+  /// Uses the same TLS setting as the LAN URL.
   String? get publicWsUrl {
     if (pubHost == null || pubPort == null) return null;
     return Uri(
-      scheme: 'wss',
+      scheme: useTls ? 'wss' : 'ws',
       host: pubHost,
       port: pubPort,
       path: '/ws',
