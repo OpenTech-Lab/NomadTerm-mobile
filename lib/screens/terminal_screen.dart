@@ -21,6 +21,7 @@ class TerminalScreen extends StatefulWidget {
 class _TerminalScreenState extends State<TerminalScreen> {
   late final Terminal _terminal;
   late final TerminalController _controller;
+  final _focusNode = FocusNode();
   StreamSubscription? _sub;
   bool _showBar = true;
 
@@ -45,11 +46,21 @@ class _TerminalScreenState extends State<TerminalScreen> {
       ws.input(widget.session.id, data);
       if (_showBar) setState(() => _showBar = false);
     };
+
+    // Request keyboard focus as soon as the terminal is ready.
+    _focusNode.requestFocus();
+  }
+
+  void _toggleBar() {
+    setState(() => _showBar = !_showBar);
+    // Re-focus the terminal after toggling so the keyboard stays up.
+    _focusNode.requestFocus();
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -63,15 +74,21 @@ class _TerminalScreenState extends State<TerminalScreen> {
     return Scaffold(
       backgroundColor: th.bg,
       appBar: _showBar ? _buildAppBar(th) : null,
-      body: GestureDetector(
-        onTap: () => setState(() => _showBar = !_showBar),
-        child: TerminalView(
-          _terminal,
-          controller: _controller,
-          autofocus: true,
-          padding: const EdgeInsets.all(4),
-          textStyle: TerminalStyle(fontSize: sp.termFontSize),
-          theme: termTheme,
+      body: SafeArea(
+        child: GestureDetector(
+          // translucent so TerminalView still receives pointer events for text
+          // selection, scroll, etc. — the onTap only fires on unhandled taps.
+          behavior: HitTestBehavior.translucent,
+          onTap: _toggleBar,
+          child: TerminalView(
+            _terminal,
+            controller: _controller,
+            focusNode: _focusNode,
+            autofocus: true,
+            padding: const EdgeInsets.all(4),
+            textStyle: TerminalStyle(fontSize: sp.termFontSize),
+            theme: termTheme,
+          ),
         ),
       ),
     );
@@ -100,7 +117,6 @@ class _TerminalScreenState extends State<TerminalScreen> {
           },
           child: Text(th.labelKill, style: th.monoSm(color: th.errorRed)),
         ),
-        const SizedBox(height: 36),
       ]),
     ),
   );
