@@ -198,6 +198,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       return;
     }
 
+    // Return to onboarding screen first, then connect in background.
+    setState(() => _scanning = false);
     _repoAuth.saveRepo(config);
     _connectWith(config);
   }
