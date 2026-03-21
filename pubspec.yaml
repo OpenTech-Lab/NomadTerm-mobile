@@ -44,6 +44,9 @@ dependencies:
   # Secure token storage
   flutter_secure_storage: ^9.0.0
 
+  # SHA-256 for TLS certificate fingerprint pinning
+  crypto: ^3.0.3
+
   # Local push notifications (tool-call approvals)
   flutter_local_notifications: ^17.0.0
 

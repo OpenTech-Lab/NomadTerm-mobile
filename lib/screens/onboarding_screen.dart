@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/connection_config.dart';
 import '../providers/settings_provider.dart';
 import '../services/repo_auth_service.dart';
+import '../services/tls_pinning.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
 import 'session_list_screen.dart';
@@ -84,10 +87,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       _connectError = null;
     });
 
+    // For wss:// with no fingerprint in QR, probe the cert and ask the user
+    // to trust it before connecting (SSH-style TOFU).
+    if (config.useTls && config.certFingerprint == null) {
+      final probed = await _probeCertFingerprint(config.host, config.port);
+      if (probed != null) {
+        if (!mounted) return;
+        final trusted = await _showTrustDialog(probed);
+        if (!mounted) return;
+        if (!trusted) {
+          setState(() => _connecting = false);
+          return;
+        }
+        final pinKey = config.repoId.isNotEmpty ? config.repoId : config.token;
+        await TlsPinningService.pin(pinKey, probed);
+        config = config.copyWith(certFingerprint: probed);
+      }
+    }
+
     final ws = WsService(config);
     try {
       await ws.connect();
-      // Give a brief moment for the ready/error to propagate.
+      // Give a brief moment for the connection state to settle.
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       if (!mounted) {
@@ -108,7 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ws.dispose();
         setState(() {
           _connecting = false;
-          _connectError = 'cannot reach server at ${config.host}:${config.port}';
+          _connectError = ws.lastError ?? 'cannot reach server at ${config.host}:${config.port}';
         });
       }
     } catch (e) {
@@ -119,6 +140,79 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         _connectError = 'cannot reach server at ${config.host}:${config.port}';
       });
     }
+  }
+
+  /// Probe the TLS certificate fingerprint without establishing a full WS connection.
+  /// Returns the SHA-256 fingerprint if the server uses a self-signed cert, else null.
+  Future<String?> _probeCertFingerprint(String host, int port) async {
+    String? fingerprint;
+    try {
+      final socket = await io.SecureSocket.connect(
+        host,
+        port,
+        onBadCertificate: (io.X509Certificate cert) {
+          fingerprint = TlsPinningService.computeFingerprint(cert.der);
+          return true; // accept for probe purposes
+        },
+      );
+      socket.destroy();
+    } catch (_) {}
+    return fingerprint;
+  }
+
+  /// Show a dialog asking the user to verify and trust the server certificate.
+  Future<bool> _showTrustDialog(String fingerprint) async {
+    if (!mounted) return false;
+    final sp = context.read<SettingsProvider>();
+    final th = sp.nomadTheme;
+    final fsz = sp.uiFontSize;
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: th.bg,
+            title: Text(
+              '// trust this server?',
+              style: th.monoMd(color: th.accent),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'self-signed certificate detected.\nverify the fingerprint matches what the server printed at startup.',
+                  style: th.monoSm(color: th.textMuted, size: fsz - 2),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'sha-256:',
+                  style: th.monoSm(color: th.textDim, size: fsz - 3),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(border: Border.all(color: th.border)),
+                  child: Text(
+                    fingerprint,
+                    style: th.monoSm(size: fsz - 3),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('reject', style: th.monoSm(color: th.errorRed)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('trust', style: th.monoSm(color: th.accent)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _renameRepo(ConnectionConfig repo, String newName) async {
@@ -169,11 +263,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     if (uri.scheme == 'nomadterm') {
       final expiresStr = uri.queryParameters['expires_at'];
+      final pubPortStr = uri.queryParameters['pub_port'];
       config = ConnectionConfig(
         host: uri.host,
         port: uri.port > 0 ? uri.port : 7681,
         token: uri.queryParameters['token'] ?? '',
         useTls: uri.queryParameters['tls'] == '1',
+        // fp= is percent-encoded by the server; Uri.queryParameters auto-decodes.
+        certFingerprint: uri.queryParameters['fp'],
+        pubHost: uri.queryParameters['pub_host'],
+        pubPort: pubPortStr != null ? int.tryParse(pubPortStr) : null,
         repoId: uri.queryParameters['repo_id'] ?? '',
         repoPath: uri.queryParameters['repo_path'] ?? '',
         repoName: uri.queryParameters['repo_name'] ?? '',

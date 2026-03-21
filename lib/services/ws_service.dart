@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' as io;
 
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/connection_config.dart';
 import '../models/session.dart';
 import '../models/usage.dart';
+import 'tls_pinning.dart';
 
 /// Events emitted by [WsService].
 sealed class WsEvent {}
@@ -48,12 +49,15 @@ class WsUsageUpdate extends WsEvent {
 ///
 /// Reconnects automatically on disconnect. All events are exposed via
 /// a broadcast [Stream] that multiple widgets can subscribe to.
+///
+/// For wss:// connections, [ConnectionConfig.certFingerprint] is used to
+/// pin the server's self-signed certificate (SSH-style TOFU).
 class WsService extends ChangeNotifier {
   final ConnectionConfig config;
 
   WsService(this.config);
 
-  WebSocketChannel? _channel;
+  io.WebSocket? _socket;
   StreamSubscription? _sub;
   Timer? _reconnectTimer;
   bool _disposed = false;
@@ -75,36 +79,51 @@ class WsService extends ChangeNotifier {
     if (_disposed) return;
     await _disconnect();
 
-    final uri = Uri.parse(config.wsUrl);
-    _channel = WebSocketChannel.connect(
-      uri,
-      protocols: const [],
-      // Pass Bearer token as a query param since WebSocket headers
-      // are not easily injectable on all platforms.
-    );
+    final uri = config.wsUrl;
+    io.WebSocket socket;
 
     try {
-      await _channel!.ready;
+      if (config.useTls) {
+        final expectedFp = config.certFingerprint;
+        final httpClient = io.HttpClient()
+          ..badCertificateCallback =
+              (io.X509Certificate cert, String host, int port) {
+                if (expectedFp == null) {
+                  // No fingerprint to pin — allow (still encrypted).
+                  return true;
+                }
+                return TlsPinningService.computeFingerprint(cert.der) ==
+                    expectedFp;
+              };
+        socket = await io.WebSocket.connect(uri, customClient: httpClient);
+      } else {
+        socket = await io.WebSocket.connect(uri);
+      }
     } catch (e) {
       final msg = e.toString();
       final isAuth = msg.contains('401') ||
           msg.toLowerCase().contains('unauthorized') ||
           msg.toLowerCase().contains('forbidden');
+      final isMismatch = msg.toLowerCase().contains('handshake') ||
+          msg.toLowerCase().contains('certificate');
       _lastError = isAuth
           ? 'auth failed — wrong token (401)'
-          : 'cannot reach daemon: $msg';
+          : isMismatch
+              ? 'cert fingerprint mismatch — re-scan the qr code'
+              : 'cannot reach daemon';
       _eventController.add(WsError(_lastError!));
       notifyListeners();
-      if (!isAuth) _scheduleReconnect(); // don't retry on auth errors
+      if (!isAuth && !isMismatch) _scheduleReconnect();
       return;
     }
 
+    _socket = socket;
     _connected = true;
     _lastError = null;
     _eventController.add(WsConnected());
     notifyListeners();
 
-    _sub = _channel!.stream.listen(
+    _sub = socket.listen(
       _onMessage,
       onError: (_) => _handleDisconnect(),
       onDone: _handleDisconnect,
@@ -165,14 +184,15 @@ class WsService extends ChangeNotifier {
   Future<void> _disconnect() async {
     _reconnectTimer?.cancel();
     await _sub?.cancel();
-    await _channel?.sink.close();
-    _channel = null;
+    _sub = null;
+    await _socket?.close();
+    _socket = null;
   }
 
   /// Send a JSON control message to the daemon.
   void send(Map<String, dynamic> message) {
-    if (!_connected || _channel == null) return;
-    _channel!.sink.add(jsonEncode(message));
+    if (!_connected || _socket == null) return;
+    _socket!.add(jsonEncode(message));
   }
 
   /// Spawn a new AI CLI session.
@@ -184,8 +204,8 @@ class WsService extends ChangeNotifier {
 
   /// Send binary PTY input (raw keystrokes) as a binary frame.
   void inputBinary(Uint8List data) {
-    if (!_connected || _channel == null) return;
-    _channel!.sink.add(data);
+    if (!_connected || _socket == null) return;
+    _socket!.add(data);
   }
 
   /// Approve or deny a tool-call.
@@ -201,7 +221,7 @@ class WsService extends ChangeNotifier {
     _disposed = true;
     _reconnectTimer?.cancel();
     _sub?.cancel();
-    _channel?.sink.close();
+    _socket?.close();
     _eventController.close();
     super.dispose();
   }
