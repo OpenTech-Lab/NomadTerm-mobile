@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
 import '../models/session.dart';
 import '../models/usage.dart';
-import 'tls_pinning.dart';
 
 const _kConnectTimeout = Duration(seconds: 8);
 
@@ -130,23 +130,11 @@ class WsService extends ChangeNotifier {
     );
   }
 
-  /// Open a WebSocket, applying TLS certificate pinning for wss:// URLs.
+  /// Open a WebSocket connection.
+  ///
+  /// Encryption is provided by Tailscale at the VPN layer — the connection
+  /// uses plain ws:// to the server's Tailscale IP (100.x.x.x).
   Future<io.WebSocket> _openSocket(String url) async {
-    final isSecure = url.startsWith('wss://');
-
-    if (isSecure) {
-      final httpClient = io.HttpClient();
-      httpClient.badCertificateCallback =
-          (io.X509Certificate cert, String host, int port) {
-        if (config.certFingerprint == null) return false;
-        final actual = TlsPinningService.computeFingerprint(
-            Uint8List.fromList(cert.der));
-        return actual == config.certFingerprint;
-      };
-      return io.WebSocket.connect(url, customClient: httpClient)
-          .timeout(_kConnectTimeout);
-    }
-
     return io.WebSocket.connect(url).timeout(_kConnectTimeout);
   }
 
