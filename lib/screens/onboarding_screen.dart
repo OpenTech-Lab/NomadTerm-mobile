@@ -8,7 +8,7 @@ import '../providers/settings_provider.dart';
 import '../services/repo_auth_service.dart';
 import '../services/ws_service.dart';
 import '../theme.dart';
-import 'session_list_screen.dart';
+import 'repo_list_screen.dart';
 
 /// Connection setup screen — QR scan or quick-connect from history.
 class OnboardingScreen extends StatefulWidget {
@@ -101,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           MaterialPageRoute(
             builder: (_) => ChangeNotifierProvider.value(
               value: ws,
-              child: const SessionListScreen(),
+              child: const RepoListScreen(),
             ),
           ),
         );

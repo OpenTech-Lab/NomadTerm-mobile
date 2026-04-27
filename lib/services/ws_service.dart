@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../models/connection_config.dart';
+import '../models/repo_info.dart';
 import '../models/session.dart';
 import '../models/usage.dart';
 
@@ -51,6 +52,11 @@ class WsSessionStarted extends WsEvent {
 class WsUsageUpdate extends WsEvent {
   final UsageData data;
   WsUsageUpdate(this.data);
+}
+
+class WsRepoList extends WsEvent {
+  final List<RepoInfo> repos;
+  WsRepoList(this.repos);
 }
 
 /// Manages the WebSocket connection to the NomadTerm daemon.
@@ -195,6 +201,11 @@ class WsService extends ChangeNotifier {
             ));
           case 'error':
             _eventController.add(WsError(json['message'] as String? ?? 'unknown error'));
+          case 'repo_list':
+            final list = (json['repos'] as List)
+                .map((e) => RepoInfo.fromJson(e as Map<String, dynamic>))
+                .toList();
+            _eventController.add(WsRepoList(list));
           case 'usage_update':
             _eventController.add(WsUsageUpdate(UsageData.fromJson(json)));
           default:
@@ -233,8 +244,15 @@ class WsService extends ChangeNotifier {
     _socket!.add(jsonEncode(message));
   }
 
-  /// Spawn a new AI CLI session.
-  void spawn(String cli) => send({'type': 'spawn', 'cli': cli});
+  /// Spawn a new AI CLI session, optionally in a specific workspace.
+  void spawn(String cli, {String? workspacePath}) {
+    final msg = <String, dynamic>{'type': 'spawn', 'cli': cli};
+    if (workspacePath != null) msg['workspace_path'] = workspacePath;
+    send(msg);
+  }
+
+  /// Request the list of repos registered on the server.
+  void listRepos() => send({'type': 'list_repos'});
 
   /// Send text input to a session.
   void input(String sessionId, String data) =>

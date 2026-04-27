@@ -17,7 +17,8 @@ const _cliTools = ['claude', 'codex', 'copilot', 'gemini'];
 
 /// Session list — looks like a process manager / multiplexer status screen.
 class SessionListScreen extends StatefulWidget {
-  const SessionListScreen({super.key});
+  final String? workspacePath;
+  const SessionListScreen({super.key, this.workspacePath});
 
   @override
   State<SessionListScreen> createState() => _SessionListScreenState();
@@ -84,7 +85,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
   Future<void> _spawnSession() async {
     final ws = context.read<WsService>();
     final cli = await _showCliPicker();
-    if (cli != null) ws.spawn(cli);
+    if (cli != null) ws.spawn(cli, workspacePath: widget.workspacePath);
   }
 
   Future<String?> _showCliPicker() {
