@@ -54,6 +54,26 @@ semver_gt() {
   return 1  # equal
 }
 
+print_version_snapshot() {
+  local label="$1"
+  local path="$2"
+  local pattern="$3"
+  local matches
+
+  if [ ! -f "${path}" ]; then
+    return
+  fi
+
+  matches="$(grep -nE "${pattern}" "${path}")" || {
+    echo "Error: expected version lines in ${path}" >&2
+    exit 1
+  }
+
+  echo
+  echo "${label}: ${path}"
+  printf '%s\n' "${matches}"
+}
+
 # Determine latest known version from current pubspec and existing release tags.
 LATEST_VERSION="${CURRENT_VERSION_NAME}"
 LATEST_TAG_VERSION="$(git -C "${PROJECT_ROOT}" tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -n1)"
@@ -159,16 +179,22 @@ find "${VERSION_DIR}" -maxdepth 1 -type f -name '*.md' ! -name "${VERSION_NAME}.
 echo "✓ Removed old version notes in ${VERSION_DIR} (kept ${VERSION_NAME}.md)"
 
 # 3) Add and commit
-git -C "${PROJECT_ROOT}" add \
-  "${PUBSPEC}" \
-  "${ANDROID_LOCAL_PROPERTIES}" \
-  "${IOS_PBXPROJ}" \
-  "${VERSION_FILE}" || true
-git -C "${PROJECT_ROOT}" add -A "${VERSION_DIR}" || true
+FILES_TO_ADD=(
+  "${PUBSPEC}"
+  "${IOS_PBXPROJ}"
+  "${VERSION_FILE}"
+)
+
+if [ -f "${ANDROID_LOCAL_PROPERTIES}" ]; then
+  FILES_TO_ADD+=("${ANDROID_LOCAL_PROPERTIES}")
+fi
 
 if [ -f "${IOS_GENERATED_XCCONFIG}" ]; then
-  git -C "${PROJECT_ROOT}" add "${IOS_GENERATED_XCCONFIG}" || true
+  FILES_TO_ADD+=("${IOS_GENERATED_XCCONFIG}")
 fi
+
+git -C "${PROJECT_ROOT}" add "${FILES_TO_ADD[@]}"
+git -C "${PROJECT_ROOT}" add -A "${VERSION_DIR}" || true
 
 COMMIT_MSG="chore(release): bump mobile to ${VERSION_FULL}"
 
@@ -197,5 +223,11 @@ else
   echo "✓ Pushed to origin/${CURRENT_BRANCH} and tag ${TAG_NAME}"
 fi
 
+echo
+echo "Version file snapshot:"
+print_version_snapshot "pubspec" "${PUBSPEC}" '^version: '
+print_version_snapshot "android project" "${ANDROID_LOCAL_PROPERTIES}" '^flutter\.version(Name|Code)='
+print_version_snapshot "ios generated config" "${IOS_GENERATED_XCCONFIG}" '^FLUTTER_BUILD_(NAME|NUMBER)='
+print_version_snapshot "ios project" "${IOS_PBXPROJ}" 'MARKETING_VERSION = |CURRENT_PROJECT_VERSION = '
 echo
 echo "Done! Version is now ${VERSION_FULL}"

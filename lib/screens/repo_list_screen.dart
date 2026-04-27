@@ -9,8 +9,9 @@ import '../services/ws_service.dart';
 import '../theme.dart';
 import 'session_list_screen.dart';
 
-/// After connecting via QR, shows the list of repos on the server.
-/// The user picks one to open a terminal session in that workspace.
+/// Displayed after connecting via QR. Sends [ListRepos] to the server,
+/// shows the response, and navigates into [SessionListScreen] for the
+/// chosen workspace.
 class RepoListScreen extends StatefulWidget {
   const RepoListScreen({super.key});
 
@@ -19,24 +20,25 @@ class RepoListScreen extends StatefulWidget {
 }
 
 class _RepoListScreenState extends State<RepoListScreen> {
-  List<RepoInfo> _repos = [];
-  bool _loading = true;
+  List<RepoInfo>? _repos;
+  String? _error;
   StreamSubscription? _sub;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  void _init() {
+  void _load() {
     final ws = context.read<WsService>();
     _sub = ws.events.listen((event) {
       if (event is WsRepoList) {
-        setState(() {
-          _repos = event.repos;
-          _loading = false;
-        });
+        setState(() => _repos = event.repos);
+        _sub?.cancel();
+      } else if (event is WsError) {
+        setState(() => _error = event.message);
+        _sub?.cancel();
       }
     });
     ws.listRepos();
@@ -49,12 +51,14 @@ class _RepoListScreenState extends State<RepoListScreen> {
   }
 
   void _openRepo(RepoInfo repo) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ChangeNotifierProvider.value(
-        value: context.read<WsService>(),
-        child: SessionListScreen(workspacePath: repo.path),
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider.value(
+          value: context.read<WsService>(),
+          child: SessionListScreen(workspacePath: repo.path),
+        ),
       ),
-    ));
+    );
   }
 
   @override
@@ -73,41 +77,66 @@ class _RepoListScreenState extends State<RepoListScreen> {
           child: TDivider(),
         ),
       ),
-      body: _loading
-          ? Center(
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: th.accent),
-            )
-          : _repos.isEmpty
-              ? Center(
-                  child: Text(
-                    'no repos configured\nadd folders in the desktop app',
-                    textAlign: TextAlign.center,
-                    style: th.monoSm(color: th.textMuted, size: fsz - 1),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  itemCount: _repos.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (ctx, i) {
-                    final repo = _repos[i];
-                    return GestureDetector(
-                      onTap: () => _openRepo(repo),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(border: Border.all(color: th.border)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(repo.name, style: th.monoMd(size: fsz)),
-                            const SizedBox(height: 3),
-                            Text(repo.path, style: th.monoSm(color: th.textDim, size: fsz - 3)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+      body: SafeArea(child: _buildBody(th, fsz)),
+    );
+  }
+
+  Widget _buildBody(NomadTheme th, double fsz) {
+    if (_error != null) {
+      return Center(
+        child: Text(_error!, style: th.monoSm(color: th.errorRed, size: fsz - 2)),
+      );
+    }
+
+    if (_repos == null) {
+      return Center(
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: th.accent),
+      );
+    }
+
+    if (_repos!.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('// no repos', style: th.monoSm(color: th.textDim, size: fsz - 3)),
+            const SizedBox(height: 8),
+            Text(
+              'Add a folder in the desktop app, then reconnect.',
+              style: th.monoSm(color: th.textMuted, size: fsz - 2),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      itemCount: _repos!.length,
+      itemBuilder: (_, i) {
+        final repo = _repos![i];
+        return GestureDetector(
+          onTap: () => _openRepo(repo),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(border: Border.all(color: th.border)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(repo.name, style: th.monoMd(size: fsz)),
+                const SizedBox(height: 2),
+                Text(
+                  repo.path,
+                  style: th.monoSm(color: th.textMuted, size: fsz - 3),
+                  overflow: TextOverflow.ellipsis,
                 ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
